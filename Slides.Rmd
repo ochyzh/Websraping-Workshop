@@ -1,0 +1,301 @@
+---
+title: "Workshop on Webscraping"
+author: "Olga Chyzh"
+date: "January 25, 2019"
+output: 
+  ioslides_presentation:
+    transition: default
+    widescreen: yes
+    subtitle: 
+  beamer_presentation: default
+css: styles.css
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.align = 'center', message = FALSE, warning = FALSE)
+```
+
+## Outline
+- What is webscraping?
+- Webscraping using `rvest`
+- Examples
+    + IMDB show cast
+    + Poli Sci faculty names and rank
+
+
+
+## What is Webscraping?
+- Extract data from websites 
+    + Tables
+    + Links to other websites
+    + Text
+
+```{r echo=FALSE, out.width='45%', fig.show='hold', fig.align='default'}
+knitr::include_graphics(c('./images/USHouse.png','./images/yelpreview.png'), auto_pdf = FALSE)
+```    
+
+## Why Webscrape? 
+- Because copy-paste will take a million years
+- Because it's fast
+- Because you can automate it
+
+```{r echo=FALSE, out.width='50%'}
+knitr::include_graphics("./images/copypaste.png", auto_pdf = FALSE)
+```
+
+## Webscraping with `rvest`: Step-by-Step Start Guide
+
+Install all tidyverse packages:
+```{r gettv, echo = T, eval = FALSE}
+# check if you already have it
+library(tidyverse)
+library(rvest)
+# if not:
+install.packages("tidyverse")
+library(tidyverse) # only calls the "core" of tidyverse
+
+```
+
+
+## Step 1: What Website Are You Scraping?
+```{r }
+# character variable containing the url you want to scrape
+myurl <- "https://www.imdb.com/title/tt7335184/"
+
+```
+
+## Step 2: Read HTML into R
+
+- HTML is HyperText Markup Language. 
+- Go to any [website](https://www.imdb.com/title/tt7335184/), right click, click "View Page Source" to see the HTML 
+
+```{r gethtml}
+library(tidyverse)
+library(rvest)
+myhtml <- read_html(myurl)
+myhtml
+
+```
+
+
+## Step 3: Where in the HTML Code Are Your Data?
+
+Need to find your data within the `myhtml` object. 
+
+Tags to look for: 
+
+- `<p>` This is a paragraph.`</p>`
+- `<h1>` This is a heading. `</h1>`
+- `<a>` This is a link. `</a>`
+- `<li>` item in a list `</li>`
+- `<table>`This is a table. `</table>`
+
+Can use [Selector Gadget](http://selectorgadget.com/) to find the exact location. 
+
+For more on HTML, check out the [W3schools' tutorial](http://www.w3schools.com/html/html_intro.asp) 
+- You don't need to be an expert in HTML to webscrape with `rvest`!
+
+## Step 4: 
+
+Give HTML tags into html_nodes() to extract your data of interest. Once you got the content of what you are looking for, use html_text to extract text, html_table to get a table 
+
+```{r getdesc}
+mysummary<-html_nodes(myhtml, ".summary_text") #Gets everything in the element
+mysummary
+html_text(mysummary) 
+
+#Or you can combine the operations into a pipe:
+myhtml %>% html_nodes(".summary_text") %>% html_text()
+```
+
+## Most Often, We Want to Extract a Table
+
+```{r }
+myhtml %>% html_nodes("table") %>% html_table(header = TRUE)
+
+
+```
+
+## Step 5: Save and Clean the Data
+- Notice that there are actually two tables on this page
+- You may want to remove all columns except Actor and Role.
+- Here is some sample code to clean this, but there are many ways to do the same:
+
+```{r savetidy}
+library(stringr)
+library(magrittr)
+mydat <- myhtml %>% 
+  html_nodes("table") %>%
+  extract2(1) %>% 
+  html_table(header = TRUE)
+mydat <- mydat[,c(2,4)]
+names(mydat) <- c("Actor", "Role")
+mydat <- mydat %>% 
+  mutate(Actor = Actor,
+         Role = str_extract(Role,"[^\\n]+"))
+mydat = mydat[seq(1, nrow(mydat), 2), ]
+mydat
+```
+
+## Your Turn:
+
+- Follow the same steps to get the cast of the new Spider-man movie.
+
+```{r gettable}
+myhtml <- read_html("https://www.imdb.com/title/tt4633694/?ref_=inth_ov_tt")
+myhtml %>% html_nodes("table") %>% html_table(header = TRUE)
+mydat <- myhtml %>% 
+  html_nodes("table") %>%
+  extract2(1) %>% 
+  html_table(header = TRUE)
+mydat <- mydat[,c(2,4)]
+names(mydat) <- c("Actor", "Role")
+mydat <- mydat %>% 
+  mutate(Actor = Actor,
+         Role = str_extract(Role,"[^\\n]+"))
+mydat = mydat[seq(1, nrow(mydat), 2), ]
+mydat
+
+```
+
+## Example 2: Get Names and Ranks of Faculty:
+
+- Step 1: need to get paths to all individual pages
+```{r gettab}
+
+myhtml <- read_html("https://www.pols.iastate.edu/dir/#faculty")
+
+facpaths<-html_nodes(myhtml, "a")[62:86] %>% html_attr("href")
+urlstump<-"https://www.pols.iastate.edu"
+mypaths<-paste0(urlstump, facpaths)
+mypaths
+
+
+
+
+```
+
+
+## Example 2: Get Names and Ranks of Faculty:
+
+- Step 2: write a series of commands that will scrape an individual faculty name and rank
+- Notice that the relevant css selectors are `.entry-title` and `.title`
+
+```{r}
+#Get the name:
+mypaths[1] %>% read_html() %>%
+      html_nodes(".entry-title") %>% 
+      html_text() -> pname
+
+#Get the rank:
+mypaths[1] %>% read_html() %>%
+      html_nodes(".title") %>% 
+      html_text() -> title
+
+#Put them together:  
+cbind.data.frame(name=unlist(pname),title=unlist(title))
+
+```
+## Example 2: Get Names and Ranks of Faculty:
+
+- Step 3: write a wrapper function that will do this for any faculty once given a url
+```{r}
+get_info<-function(myurl) {
+  test <- try(myurl %>% read_html(), silent=T)
+  if ("try-error" %in% class(test)) {
+    return(NA)
+  } else
+    myurl %>% read_html() %>%
+      html_nodes(".entry-title") %>% 
+      html_text() -> pname
+    myurl %>% read_html() %>%
+      html_nodes(".title") %>% 
+      html_text() -> title
+  
+    return(cbind.data.frame(name=unlist(pname),title=unlist(title)))
+}
+
+get_info(mypaths[1]) #Test the function
+
+mydata<-do.call(rbind, lapply(mypaths, get_info))
+mydata
+```
+
+
+
+## Key Functions: `html_nodes`
+
+- `html_nodes(x, "path")` extracts all elements from the page `x` that have the tag / class / id `path`. (Use SelectorGadget to determine `path`.) 
+- `html_node()` does the same thing but only returns the first matching element. 
+- Can be chained
+
+```{r nodesex, echo = T, eval = FALSE}
+myhtml %>% 
+  html_nodes("p") %>% # first get all the paragraphs 
+  html_nodes("a") # then get all the links in those paragraphs
+```
+
+## Key Functions: `html_text`
+
+- `html_text(x)` extracts all text from the nodeset `x` 
+- Good for cleaning output
+
+```{r textex, echo = T, eval = FALSE}
+myhtml %>% 
+  html_nodes("p") %>% # first get all the paragraphs 
+  html_nodes("a") %>% # then get all the links in those paragraphs
+  html_text() # get the linked text only 
+```
+
+## Key Functions: `html_table` {.smaller}
+
+- `html_table(x, header, fill)` - parse html table(s) from `x` into a data frame or list of data frames 
+- Structure of HTML makes finding and extracting tables easy!
+
+```{r tableex, echo = T, eval = FALSE}
+myhtml %>% 
+  html_nodes("table") %>% # get the tables 
+  head(2) # look at first 2
+```
+
+```{r tableex2, echo = T, eval = FALSE}
+myhtml %>% 
+  html_nodes("table") %>% # get the tables 
+  extract2(2) %>% # pick the second one to parse
+  html_table(header = TRUE) # parse table 
+```
+
+## Key functions: `html_attrs`
+
+- `html_attrs(x)` - extracts all attribute elements from a nodeset `x`
+- `html_attr(x, name)` - extracts the `name` attribute from all elements in nodeset `x`
+- Attributes are things in the HTML like `href`, `title`, `class`, `style`, etc.
+- Use these functions to find and extract your data
+
+```{r attrsex, echo = T, eval = FALSE}
+myhtml %>% 
+  html_nodes("table") %>% extract2(2) %>%
+  html_attrs()
+```
+
+```{r attrsex2, echo = T, eval = FALSE}
+myhtml %>% 
+  html_nodes("p") %>% html_nodes("a") %>%
+  html_attr("href")
+```
+
+## Other functions
+
+- `html_children` - list the "children" of the HTML page. Can be chained like `html_nodes`
+- `html_name` - gives the tags of a nodeset. Use in a chain with `html_children`
+```{r childex, echo = T, eval = FALSE}
+myhtml %>% 
+  html_children() %>% 
+  html_name()
+```
+- `html_form` - parses HTML forms (checkboxes, fill-in-the-blanks, etc.)
+- `html_session` - simulate a session in an html browser; use the functions `jump_to`, `back` to navigate through the page
+
+
