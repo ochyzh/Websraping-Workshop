@@ -30,7 +30,7 @@ knitr::opts_chunk$set(
 
 ## Set-Up
 
-- Download all materials from Github
+- Download all materials from [Github](https://github.com/ochyzh/Websraping-Workshop)
 
 - Lecture : practice = 2 : 1
 
