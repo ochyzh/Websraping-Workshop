@@ -1,50 +1,116 @@
 ---
-title: "Workshop on Webscraping"
-author: "Olga Chyzh"
-date: "January 25, 2019"
-output: 
-  ioslides_presentation:
-    transition: default
-    widescreen: yes
-    subtitle: 
-  beamer_presentation: default
-css: styles.css
+title: Intro to Webscraping
+subtitle: Day 1
+author: "Olga Chyzh [www.olgachyzh.com]"
+output:
+  xaringan::moon_reader:
+    lib_dir: libs
+    nature:
+      highlightStyle: github
+      highlightLines: true
+      countIncrementalSlides: false
+exclude: true
 editor_options: 
   chunk_output_type: console
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, fig.align = 'center', message = FALSE, warning = FALSE)
+```{r  setup, message=FALSE, warning=FALSE, include=FALSE}
+options(
+  htmltools.dir.version = FALSE, # for blogdown
+  width = 80,
+  tibble.width = 80
+)
+
+knitr::opts_chunk$set(
+  fig.align = "center",  warning=FALSE, message=FALSE
+)
+
 ```
 
+
+## Set-Up
+
+- Download all materials from Github
+
+- Lecture : practice = 2 : 1
+
+- Follow along in RStudio IDE
+
+- If stuck, ask! 
+
+- The recording will be available on MyMedia
+
+- Email questions/comments/suggestions for the remaining 4 workshops
+
+    - Working with Twitter Data
+    
+    - Data Cleaning/Management 
+    
+    - Other Suggestions
+
+
+
+
+---
 ## Outline
+
 - What is webscraping?
+
 - Webscraping using `rvest`
+
 - Examples
+
     + IMDB show cast
-    + Poli Sci faculty names and rank
+    
+    + 2020 US election returns
+    
+    + Covid-19 data
 
-
+---
 
 ## What is Webscraping?
+
 - Extract data from websites 
+
     + Tables
+    
     + Links to other websites
+    
     + Text
 
-```{r echo=FALSE, out.width='45%', fig.show='hold', fig.align='default'}
-knitr::include_graphics(c('./images/USHouse.png','./images/yelpreview.png'), auto_pdf = FALSE)
+```{r echo=FALSE, out.width='100%', fig.show='hold', fig.align='default'}
+knitr::include_graphics('./images/USHouse.png', auto_pdf = FALSE)
 ```    
 
-## Why Webscrape? 
-- Because copy-paste will take a million years
+---
+## Why Webscrape?
+
+- Because copy-paste is tedious
+
 - Because it's fast
+
 - Because you can automate it
+
+- Because it helps reduce/catch errors
 
 ```{r echo=FALSE, out.width='50%'}
 knitr::include_graphics("./images/copypaste.png", auto_pdf = FALSE)
 ```
 
+---
+## Webscraping: Broad Strokes
+
+- All websites are written in `HTML` (mostly)
+
+- `HTML` code is messy and difficult to parse manually
+
+- We will use R to 
+   - read the `HTML` (or other) code 
+   - clean it up to extract the data we need
+
+- Need only a very rudimentary understanding of `HTML`
+
+---
 ## Webscraping with `rvest`: Step-by-Step Start Guide
 
 Install all tidyverse packages:
@@ -58,18 +124,23 @@ library(tidyverse) # only calls the "core" of tidyverse
 
 ```
 
+---
 
 ## Step 1: What Website Are You Scraping?
+
 ```{r }
 # character variable containing the url you want to scrape
-myurl <- "https://www.imdb.com/title/tt7335184/"
+myurl <- "https://www.imdb.com/title/tt0068646/"
 
 ```
 
-## Step 2: Read HTML into R
+---
 
-- HTML is HyperText Markup Language. 
-- Go to any [website](https://www.imdb.com/title/tt7335184/), right click, click "View Page Source" to see the HTML 
+## Step 2: Read `HTML` into R
+
+- `HTML` is HyperText Markup Language. 
+
+- Go to any [website](https://www.imdb.com/title/tt0068646/), right click, click "View Page Source" to see the HTML 
 
 ```{r gethtml}
 library(tidyverse)
@@ -78,38 +149,46 @@ myhtml <- read_html(myurl)
 myhtml
 
 ```
-
+---
 
 ## Step 3: Where in the HTML Code Are Your Data?
 
-Need to find your data within the `myhtml` object. 
+- Need to find your data within the `myhtml` object. 
 
-Tags to look for: 
+- In `HTML`, all objects, such as tables, paragraphs, hyperlinks, and headings, are inside "tags" that are surrounded by <> symbols
 
-- `<p>` This is a paragraph.`</p>`
-- `<h1>` This is a heading. `</h1>`
-- `<a>` This is a link. `</a>`
-- `<li>` item in a list `</li>`
-- `<table>`This is a table. `</table>`
+- Examples of tags: 
 
-Can use [Selector Gadget](http://selectorgadget.com/) to find the exact location. 
+    - `<p>` This is a paragraph.`</p>`
+    - `<h1>` This is a heading. `</h1>`
+    - `<a>` This is a link. `</a>`
+    - `<li>` item in a list `</li>`
+    - `<table>`This is a table. `</table>`
 
-For more on HTML, check out the [W3schools' tutorial](http://www.w3schools.com/html/html_intro.asp) 
+- Can use [Selector Gadget](http://selectorgadget.com/) to find the exact location. Enter `vignette("selectorgadget")` for an overview. 
+
+- Can also skim through the raw html code looking for possible tags.
+
+- For more on HTML, check out the [W3schools' tutorial](http://www.w3schools.com/html/html_intro.asp) 
+
 - You don't need to be an expert in HTML to webscrape with `rvest`!
+
+---
 
 ## Step 4: 
 
 Give HTML tags into html_nodes() to extract your data of interest. Once you got the content of what you are looking for, use html_text to extract text, html_table to get a table 
 
 ```{r getdesc}
-mysummary<-html_nodes(myhtml, ".summary_text") #Gets everything in the element
+mysummary<-html_nodes(myhtml, "#titleCast") #Gets everything in the element
 mysummary
 html_text(mysummary) 
 
 #Or you can combine the operations into a pipe:
-myhtml %>% html_nodes(".summary_text") %>% html_text()
+myhtml %>% html_nodes("#titleCast") %>% html_text()
 ```
 
+---
 ## Most Often, We Want to Extract a Table
 
 ```{r }
@@ -117,10 +196,11 @@ myhtml %>% html_nodes("table") %>% html_table(header = TRUE)
 
 
 ```
-
+---
 ## Step 5: Save and Clean the Data
-- Notice that there are actually two tables on this page
+
 - You may want to remove all columns except Actor and Role.
+
 - Here is some sample code to clean this, but there are many ways to do the same:
 
 ```{r savetidy}
@@ -128,114 +208,98 @@ library(stringr)
 library(magrittr)
 mydat <- myhtml %>% 
   html_nodes("table") %>%
-  extract2(1) %>% 
+  extract2(1) %>% #our table is actually nested within a list element [[]]
   html_table(header = TRUE)
 mydat <- mydat[,c(2,4)]
 names(mydat) <- c("Actor", "Role")
 mydat <- mydat %>% 
   mutate(Actor = Actor,
-         Role = str_extract(Role,"[^\\n]+"))
-mydat = mydat[seq(1, nrow(mydat), 2), ]
+         Role = str_extract(Role,"[^\\n]+")) #anything but [^] one or more instances + of \n
 mydat
 ```
 
-## Your Turn:
+---
+## Your Turn (5 min)
 
-- Follow the same steps to get the cast of the new Spider-man movie.
+- Follow the same steps to get the cast of the Wizard of Oz movie.
 
-```{r gettable}
-myhtml <- read_html("https://www.imdb.com/title/tt4633694/?ref_=inth_ov_tt")
-myhtml %>% html_nodes("table") %>% html_table(header = TRUE)
-mydat <- myhtml %>% 
-  html_nodes("table") %>%
-  extract2(1) %>% 
-  html_table(header = TRUE)
-mydat <- mydat[,c(2,4)]
-names(mydat) <- c("Actor", "Role")
-mydat <- mydat %>% 
-  mutate(Actor = Actor,
-         Role = str_extract(Role,"[^\\n]+"))
-mydat = mydat[seq(1, nrow(mydat), 2), ]
+- Clean up the output the best you can. Feel free to consult the [`stringr` cheatsheet](https://evoldyn.gitlab.io/evomics-2018/ref-sheets/R_strings.pdf)
+
+---
+
+## Why Is This Useful?
+
+- Can write a loop to get cast of a long list of movies
+
+- Can write a loop to get any tables from any website/websites
+
+---
+## Example 2: Get 2020 US Election Returns in Utah
+
+- Step 1: find the relevant url
+
+```{r}
+myurl<-"https://electionresults.utah.gov/elections/countyCount/399789495"
+```
+
+- Step 2: Scrape the `html` code
+
+```{r}
+myhtml<-read_html(myurl)
+```
+
+
+- Step 3: Find the relevant css-selector (I tried `#information`, then `.county-count-table`). Note that simply `table` also works.
+
+
+```{r utah_html}
+myhtml %>% html_nodes(".county-count-table") 
+```
+---
+## Step 4: Use `html_table` to extract the table.
+
+```{r}
+myhtml %>% html_nodes(".county-count-table") %>% 
+  html_table(header=T) 
+```
+
+
+---
+## Step 5: Clean Up 
+
+Just get the vote counts for Trump and Biden by county
+
+```{r}
+mydat<- myhtml %>% html_nodes(".county-count-table") %>% 
+  html_table(header=F) %>% extract2(1) 
+mydat<-mydat[-c(1:3),c(1,4,9)]
+names(mydat)<-c("County","Trump","Biden")
 mydat
-
 ```
 
-## Example 2: Get Names and Ranks of Faculty:
+---
+## Your Turn (5 min)
 
-- Step 1: need to get paths to all individual pages
-```{r gettab}
-
-myhtml <- read_html("https://www.pols.iastate.edu/dir/#faculty")
-
-facpaths<-html_nodes(myhtml, "a")[62:86] %>% html_attr("href")
-urlstump<-"https://www.pols.iastate.edu"
-mypaths<-paste0(urlstump, facpaths)
-mypaths
+Scrape the Congressional Election returns from the same website
 
 
-
-
-```
-
-
-## Example 2: Get Names and Ranks of Faculty:
-
-- Step 2: write a series of commands that will scrape an individual faculty name and rank
-- Notice that the relevant css selectors are `.entry-title` and `.title`
-
-```{r}
-#Get the name:
-mypaths[1] %>% read_html() %>%
-      html_nodes(".entry-title") %>% 
-      html_text() -> pname
-
-#Get the rank:
-mypaths[1] %>% read_html() %>%
-      html_nodes(".title") %>% 
-      html_text() -> title
-
-#Put them together:  
-cbind.data.frame(name=unlist(pname),title=unlist(title))
-
-```
-## Example 2: Get Names and Ranks of Faculty:
-
-- Step 3: write a wrapper function that will do this for any faculty once given a url
-```{r}
-get_info<-function(myurl) {
-  test <- try(myurl %>% read_html(), silent=T)
-  if ("try-error" %in% class(test)) {
-    return(NA)
-  } else
-    myurl %>% read_html() %>%
-      html_nodes(".entry-title") %>% 
-      html_text() -> pname
-    myurl %>% read_html() %>%
-      html_nodes(".title") %>% 
-      html_text() -> title
-  
-    return(cbind.data.frame(name=unlist(pname),title=unlist(title)))
-}
-
-get_info(mypaths[1]) #Test the function
-
-mydata<-do.call(rbind, lapply(mypaths, get_info))
-mydata
-```
-
+---
 
 
 ## Key Functions: `html_nodes`
 
 - `html_nodes(x, "path")` extracts all elements from the page `x` that have the tag / class / id `path`. (Use SelectorGadget to determine `path`.) 
+
 - `html_node()` does the same thing but only returns the first matching element. 
 - Can be chained
 
 ```{r nodesex, echo = T, eval = FALSE}
-myhtml %>% 
+myurl<-"https://electionresults.utah.gov/elections/"
+read_html(myurl) %>% 
   html_nodes("p") %>% # first get all the paragraphs 
   html_nodes("a") # then get all the links in those paragraphs
 ```
+---
 
 ## Key Functions: `html_text`
 
@@ -243,59 +307,164 @@ myhtml %>%
 - Good for cleaning output
 
 ```{r textex, echo = T, eval = FALSE}
-myhtml %>% 
+read_html(myurl) %>% 
   html_nodes("p") %>% # first get all the paragraphs 
   html_nodes("a") %>% # then get all the links in those paragraphs
   html_text() # get the linked text only 
+
+myurl <- "https://www.tripadvisor.ca/Attraction_Review-g155019-d155483-Reviews-CN_Tower-Toronto_Ontario.html"
+read_html(myurl) %>% 
+  html_nodes(".cPQsENeY") %>%
+  html_text()
 ```
 
-## Key Functions: `html_table` {.smaller}
+---
+## Key Functions: `html_table` 
 
 - `html_table(x, header, fill)` - parse html table(s) from `x` into a data frame or list of data frames 
 - Structure of HTML makes finding and extracting tables easy!
 
 ```{r tableex, echo = T, eval = FALSE}
-myhtml %>% 
+myurl<-"https://electionresults.utah.gov/elections/countyCount/399789495"
+read_html(myurl) %>% 
   html_nodes("table") %>% # get the tables 
-  head(2) # look at first 2
+  html_table(header=F) %>%
+  head() 
 ```
 
-```{r tableex2, echo = T, eval = FALSE}
-myhtml %>% 
-  html_nodes("table") %>% # get the tables 
-  extract2(2) %>% # pick the second one to parse
-  html_table(header = TRUE) # parse table 
+---
+## Example 3: CNN Covid-19 Data
+
+- Goal: scrape [CNN data](https://www.cnn.com/resources/coronavirus-information/) on daily US county-level Covid-19 cases going back to February 2020.
+
+- Problem: CNN asks you to input zip to see data for each state, no single downloadable data file.
+
+- Solution: write a program that will iteratively enter zip codes and scrape the raw data from source code.
+
+- Another (small) problem: the source code is in `Java`, not `HTML`
+
+---
+## Step 1: Get the url
+
+- Notice that the urls are of the pattern `https://www.cnn.com/resources/coronavirus-information/`+`US zip`
+
+- Start with Iowa (zip 50010), then loop over other states.
+
+```{r}
+myurl<- "https://www.cnn.com/resources/coronavirus-information/50010"
+myhtml<- read_html(myurl) #technically not just html, but the command will still scrape the source code.
 ```
 
-## Key functions: `html_attrs`
+- The rest is just parsing the source code
 
-- `html_attrs(x)` - extracts all attribute elements from a nodeset `x`
-- `html_attr(x, name)` - extracts the `name` attribute from all elements in nodeset `x`
-- Attributes are things in the HTML like `href`, `title`, `class`, `style`, etc.
-- Use these functions to find and extract your data
+---
+## Step 2: Clean Up and Extract Data
 
-```{r attrsex, echo = T, eval = FALSE}
-myhtml %>% 
-  html_nodes("table") %>% extract2(2) %>%
-  html_attrs()
+```{r}
+j<-html_nodes(myhtml,"script#__NEXT_DATA__")  %>%
+  html_text() #strip all html code 
+
+library(jsonlite)
+j1<-fromJSON(j)
+
 ```
 
-```{r attrsex2, echo = T, eval = FALSE}
-myhtml %>% 
-  html_nodes("p") %>% html_nodes("a") %>%
-  html_attr("href")
+---
+## Extract Information
+
+```{r, eval=F}
+ia_cnties<-ls(j1$props$pageProps$stateData$counties)
+
+#Get daily cases for one county in IA:
+adair_co_cases<-j1$props$pageProps$stateData$counties$adair$confirmed_time
+
+#Get dates:
+library(lubridate)
+last_date<-max(ymd(names(j1$props$pageProps$stateData$counties$adair$timeseries$confirmed))) #find out the last date for which the data are available
+mydates<-seq(last_date-length(adair_co_cases)+1,last_date,1)
+adair<-cbind.data.frame(county="adair",date=mydates,cases=adair_co_cases)
 ```
 
-## Other functions
+---
+## Write a loop to get all counties in IA:
+```{r, eval=F}
+mydata<-NULL
+for (i in ia_cnties){
+  d<-j1$props$pageProps$stateData$counties[[i]]
+  num_cases<-d$confirmed_time
+  mydates<-seq(from=last_date-length(num_cases)+1,last_date,by=1)
+  d<-cbind.data.frame(county=i,date=mydates,cases=num_cases)
+  mydata<-rbind.data.frame(mydata,d)
+}
 
-- `html_children` - list the "children" of the HTML page. Can be chained like `html_nodes`
-- `html_name` - gives the tags of a nodeset. Use in a chain with `html_children`
-```{r childex, echo = T, eval = FALSE}
-myhtml %>% 
-  html_children() %>% 
-  html_name()
+library(ggplot2)
+ggplot(data=mydata, aes(x=date,y=cases, group=county))+geom_line()
 ```
-- `html_form` - parses HTML forms (checkboxes, fill-in-the-blanks, etc.)
-- `html_session` - simulate a session in an html browser; use the functions `jump_to`, `back` to navigate through the page
+
+---
+## Future Workshop Ideas
+
+- More web-scraping examples
+
+- Data cleaning: working with strings (categorical variables)
+
+- Data cleaning: merging, reshaping, recoding
+
+- Data cleaning: working with dates and time data
+
+- Data cleaning: loops and functions to speed up coding
+
+- Other data-related topics?  
+
+
+
+```{r, eval=F, echo=F}
+library(lubridate)
+
+cnties<-j1$props$pageProps$stateData$counties[1:5]
+cnties<-tibble(cnty=cnties)
+
+cnty_inf<-cnties %>% hoist(cnty, 
+                 county="county", 
+                 fips="fips", 
+                 state="state" ,
+                 population_density_sqmi="population_density_sqmi",
+                 hh_median_income="hh_median_income",
+                 hospital_capacity="hospital_capacity"
+                 ) %>% select(-cnty)
+
+cnty_names<-ls(cnties$cnty)
+mydata<-NULL
+for (i in cnty_names){
+d<-j1$props$pageProps$stateData$counties[[i]]
+last_date<-max(ymd(names(d$timeseries$new_confirmed)))
+mydates<-seq(last_date-length(deaths),last_date,1)
+confirmed<-d$confirmed_time
+deaths<-d$deaths_time
+fips<-d$fips
+population<-d$population$value
+if (length(mydates)>length(confirmed)) {
+  tms<-length(mydates)-length(confirmed)
+  confirmed<-c(rep(0,tms), confirmed)
+}
+
+
+if (length(mydates)>length(deaths)) {
+  tms<-length(mydates)-length(deaths)
+  deaths<-c(rep(0,tms), deaths)
+}
+
+
+d<-cbind.data.frame(fips,population,mydates,confirmed,deaths)
+mydata<-rbind(mydata, d)
+}
+
+d<-left_join(mydata, cnty_inf, by="fips")
+
+
+```
+
+
+
 
 
