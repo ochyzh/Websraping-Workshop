@@ -236,7 +236,7 @@ mydat
 ---
 ## Example 2: Get 2020 US Election Returns in Utah
 
-- Step 1: find the relevant url
+- Step 1: find the relevant `url`
 
 ```{r}
 myurl<-"https://electionresults.utah.gov/elections/countyCount/399789495"
@@ -344,7 +344,7 @@ read_html(myurl) %>%
 - Another (small) problem: the source code is in `Java`, not `HTML`
 
 ---
-## Step 1: Get the url
+## Step 1: Get the `url`
 
 - Notice that the urls are of the pattern `https://www.cnn.com/resources/coronavirus-information/`+`US zip`
 
@@ -352,7 +352,9 @@ read_html(myurl) %>%
 
 ```{r}
 myurl<- "https://www.cnn.com/resources/coronavirus-information/50010"
-myhtml<- read_html(myurl) #technically not just html, but the command will still scrape the source code.
+myhtml<- read_html(myurl)  #technically not just html, but the command will still scrape the source code.
+  
+
 ```
 
 - The rest is just parsing the source code
@@ -364,9 +366,13 @@ myhtml<- read_html(myurl) #technically not just html, but the command will still
 j<-html_nodes(myhtml,"script#__NEXT_DATA__")  %>%
   html_text() #strip all html code 
 
+```
+
+- Use `library(jsonlite)` to convert `java` code to an `R` object
+
+```{r}
 library(jsonlite)
 j1<-fromJSON(j)
-
 ```
 
 ---
@@ -400,71 +406,4 @@ for (i in ia_cnties){
 library(ggplot2)
 ggplot(data=mydata, aes(x=date,y=cases, group=county))+geom_line()
 ```
-
----
-## Future Workshop Ideas
-
-- More web-scraping examples
-
-- Data cleaning: working with strings (categorical variables)
-
-- Data cleaning: merging, reshaping, recoding
-
-- Data cleaning: working with dates and time data
-
-- Data cleaning: loops and functions to speed up coding
-
-- Other data-related topics?  
-
-
-
-```{r, eval=F, echo=F}
-library(lubridate)
-
-cnties<-j1$props$pageProps$stateData$counties[1:5]
-cnties<-tibble(cnty=cnties)
-
-cnty_inf<-cnties %>% hoist(cnty, 
-                 county="county", 
-                 fips="fips", 
-                 state="state" ,
-                 population_density_sqmi="population_density_sqmi",
-                 hh_median_income="hh_median_income",
-                 hospital_capacity="hospital_capacity"
-                 ) %>% select(-cnty)
-
-cnty_names<-ls(cnties$cnty)
-mydata<-NULL
-for (i in cnty_names){
-d<-j1$props$pageProps$stateData$counties[[i]]
-last_date<-max(ymd(names(d$timeseries$new_confirmed)))
-mydates<-seq(last_date-length(deaths),last_date,1)
-confirmed<-d$confirmed_time
-deaths<-d$deaths_time
-fips<-d$fips
-population<-d$population$value
-if (length(mydates)>length(confirmed)) {
-  tms<-length(mydates)-length(confirmed)
-  confirmed<-c(rep(0,tms), confirmed)
-}
-
-
-if (length(mydates)>length(deaths)) {
-  tms<-length(mydates)-length(deaths)
-  deaths<-c(rep(0,tms), deaths)
-}
-
-
-d<-cbind.data.frame(fips,population,mydates,confirmed,deaths)
-mydata<-rbind(mydata, d)
-}
-
-d<-left_join(mydata, cnty_inf, by="fips")
-
-
-```
-
-
-
-
 
