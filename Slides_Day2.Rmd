@@ -1,0 +1,366 @@
+---
+title: Webscraping 
+subtitle: Day 2
+author: "Olga Chyzh [www.olgachyzh.com]"
+output:
+  xaringan::moon_reader:
+    lib_dir: libs
+    nature:
+      highlightStyle: github
+      highlightLines: true
+      countIncrementalSlides: false
+exclude: true
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r  setup, message=FALSE, warning=FALSE, include=FALSE}
+options(
+  htmltools.dir.version = FALSE, # for blogdown
+  width = 80,
+  tibble.width = 80
+)
+
+knitr::opts_chunk$set(
+  fig.align = "center",  warning=FALSE, message=FALSE
+)
+
+```
+
+
+
+## Outline
+
+
+- Warm-up
+
+    - Example 1: 2020 US election returns
+    
+- Write loops and functions to scrape multiple pages: `for`, `lapply`
+    
+- Scraping Javascript (easy)
+
+    - Example 2: Covid-19 data
+
+- More Javascript (intermediate)
+
+    - Example 3: Parliament Transcripts
+
+- Practice extracting various elements, writing loops and functions
+
+    - Example 4: Government Contracts
+    
+- Dealing with multiple pages of search results
+
+Download all materials from [Github](https://github.com/ochyzh/Websraping-Workshop)
+
+Workshop 1 video posted [here](https://play.library.utoronto.ca/0de7f9b4b6295aafbee68a61e198c845)
+
+---
+## Required Packages
+
+Install all tidyverse packages:
+```{r gettv, echo = T, eval = FALSE}
+# check if you already have it
+library(tidyverse)
+library(magrittr)
+library(rvest)
+# if not:
+install.packages("tidyverse")
+library(tidyverse) # only calls the "core" of tidyverse
+
+```
+
+
+---
+## Example 1: Get 2020 US Election Returns in Utah
+
+- Step 1: find the relevant `url`
+
+```{r}
+library(tidyverse)
+library(magrittr)
+library(rvest)
+myurl<-"https://electionresults.utah.gov/elections/countyCount/399789495"
+```
+
+- Step 2: Scrape the `html` code
+
+```{r}
+myhtml<-read_html(myurl)
+```
+
+
+- Step 3: Find the relevant css-selector (I tried `#information`, then `.county-count-table`). Note that simply `table` also works.
+
+
+```{r utah_html}
+myhtml %>% html_nodes(".county-count-table") 
+```
+---
+## Step 4: Use `html_table` to extract the table.
+
+```{r}
+myhtml %>% html_nodes(".county-count-table") %>% 
+  html_table(header=T) 
+```
+
+
+---
+## Step 5: Clean Up 
+
+Just get the vote counts for Trump and Biden by county
+
+```{r}
+mydat<- myhtml %>% html_nodes(".county-count-table") %>% 
+  html_table(header=F) %>% extract2(1) 
+mydat<-mydat[-c(1:3),c(1,4,9)]
+names(mydat)<-c("County","Trump","Biden")
+mydat
+```
+
+---
+## Your Turn (5 min)
+
+Scrape the Congressional Election returns from the same website
+
+
+---
+
+
+## Key Functions: `html_nodes`
+
+- `html_nodes(x, "path")` extracts all elements from the page `x` that have the tag / class / id `path`. (Use SelectorGadget to determine `path`.) 
+
+- `html_node()` does the same thing but only returns the first matching element. 
+- Can be chained
+
+```{r nodesex, echo = T, eval = FALSE}
+myurl<-"https://electionresults.utah.gov/elections/"
+read_html(myurl) %>% 
+  html_nodes("p") %>% # first get all the paragraphs 
+  html_nodes("a") # then get all the links in those paragraphs
+```
+---
+
+## Key Functions: `html_text`
+
+- `html_text(x)` extracts all text from the nodeset `x` 
+- Good for cleaning output
+
+```{r textex, echo = T, eval = FALSE}
+read_html(myurl) %>% 
+  html_nodes("p") %>% # first get all the paragraphs 
+  html_nodes("a") %>% # then get all the links in those paragraphs
+  html_text() # get the linked text only 
+
+myurl <- "https://www.tripadvisor.ca/Attraction_Review-g155019-d155483-Reviews-CN_Tower-Toronto_Ontario.html"
+read_html(myurl) %>% 
+  html_nodes(".cPQsENeY") %>%
+  html_text()
+```
+
+---
+## Key Functions: `html_table` 
+
+- `html_table(x, header, fill)` - parse html table(s) from `x` into a data frame or list of data frames 
+- Structure of HTML makes finding and extracting tables easy!
+
+```{r tableex, echo = T, eval = FALSE}
+myurl<-"https://electionresults.utah.gov/elections/countyCount/399789495"
+read_html(myurl) %>% 
+  html_nodes("table") %>% # get the tables 
+  html_table(header=F) %>%
+  head() 
+```
+
+---
+## Example 2: CNN Covid-19 Data
+
+- Goal: scrape [CNN data](https://www.cnn.com/resources/coronavirus-information/) on daily US county-level Covid-19 cases going back to February 2020.
+
+- Problem: CNN asks you to input zip to see data for each state, no single downloadable data file.
+
+- Solution: write a program that will iteratively enter zip codes and scrape the raw data from source code.
+
+- Another (small) problem: the source code is in `Java`, not `HTML`
+
+---
+## Step 1: Get the `url`
+
+- Notice that the urls are of the pattern `https://www.cnn.com/resources/coronavirus-information/`+`US zip`
+
+- Start with Iowa (zip 50010), then loop over other states.
+
+```{r}
+myurl<- "https://www.cnn.com/resources/coronavirus-information/50010"
+myhtml<- read_html(myurl)  #technically not just html, but the command will still scrape the source code.
+  
+
+```
+
+- The rest is just parsing the source code
+
+---
+## Step 2: Clean Up and Extract Data
+
+```{r}
+j<-html_nodes(myhtml,"script#__NEXT_DATA__")  %>%
+  html_text() #strip all html code 
+
+```
+
+- Use `library(jsonlite)` to convert `java` code to an `R` object
+
+```{r}
+library(jsonlite)
+j1<-fromJSON(j)
+```
+
+---
+## Extract Information
+
+```{r, eval=F}
+ia_cnties<-ls(j1$props$pageProps$stateData$counties)
+
+#Get daily cases for one county in IA:
+adair_co_cases<-j1$props$pageProps$stateData$counties$adair$confirmed_time
+
+#Get dates:
+library(lubridate)
+last_date<-max(ymd(names(j1$props$pageProps$stateData$counties$adair$timeseries$confirmed))) #find out the last date for which the data are available
+mydates<-seq(last_date-length(adair_co_cases)+1,last_date,1)
+adair<-cbind.data.frame(county="adair",date=mydates,cases=adair_co_cases)
+```
+
+---
+## Write a loop to get all counties in IA:
+```{r, eval=F}
+mydata<-NULL
+for (i in ia_cnties){
+  d<-j1$props$pageProps$stateData$counties[[i]]
+  num_cases<-d$confirmed_time
+  mydates<-seq(from=last_date-length(num_cases)+1,last_date,by=1)
+  d<-cbind.data.frame(county=i,date=mydates,cases=num_cases)
+  mydata<-rbind.data.frame(mydata,d)
+}
+
+library(ggplot2)
+ggplot(data=mydata, aes(x=date,y=cases, group=county))+geom_line()
+```
+
+
+```{r, eval=F, echo=F}
+#Using rectangling
+library(lubridate)
+
+cnties<-j1$props$pageProps$stateData$counties[1:5]
+cnties<-tibble(cnty=cnties)
+
+cnty_inf<-cnties %>% hoist(cnty, 
+                 county="county", 
+                 fips="fips", 
+                 state="state" ,
+                 population_density_sqmi="population_density_sqmi",
+                 hh_median_income="hh_median_income",
+                 hospital_capacity="hospital_capacity"
+                 ) %>% select(-cnty)
+
+cnty_names<-ls(cnties$cnty)
+mydata<-NULL
+for (i in cnty_names){
+d<-j1$props$pageProps$stateData$counties[[i]]
+last_date<-max(ymd(names(d$timeseries$new_confirmed)))
+mydates<-seq(last_date-length(deaths),last_date,1)
+confirmed<-d$confirmed_time
+deaths<-d$deaths_time
+fips<-d$fips
+population<-d$population$value
+if (length(mydates)>length(confirmed)) {
+  tms<-length(mydates)-length(confirmed)
+  confirmed<-c(rep(0,tms), confirmed)
+}
+
+
+if (length(mydates)>length(deaths)) {
+  tms<-length(mydates)-length(deaths)
+  deaths<-c(rep(0,tms), deaths)
+}
+
+
+d<-cbind.data.frame(fips,population,mydates,confirmed,deaths)
+mydata<-rbind(mydata, d)
+}
+
+d<-left_join(mydata, cnty_inf, by="fips")
+
+
+```
+
+---
+
+## Scraping Javascript (No Java Background)
+
+- Any information that shows up on your browser HAS TO BE be available for scraping.
+
+- The trick is to find the correct url, usually different from the one shown in your browser.
+
+- Example: (Singapore Parliamentary debates)[https://sprs.parl.gov.sg/search/home] (from Jiajia Zhou)
+
+- Go to the link, `Search`, click the first link, then `View this Sitting's Official Report in Full`
+
+- In Chrome, go to `More Tools`-->`Developer Tools`-->`Network` and refresh the page.
+
+---
+## Example 3: Singapore Parliamentary Debates
+
+```{r echo=FALSE, out.width='100%', fig.show='hold', fig.align='default'}
+knitr::include_graphics('./images/Dev_tools.png', auto_pdf = FALSE)
+```  
+
+---
+## Singapore Parliamentary Debates
+```{r, eval=F}
+myurl<-"https://sprs.parl.gov.sg/search/getHansardReport/?sittingDate=04-11-2020"
+r<-read_html(myurl) %>% html_text()
+j1<-fromJSON(r)#convert from Java to an R object
+
+mydat<-j1$takesSectionVOList %>% #extract the elements that contain the bills
+  select(title, subTitle, sectionType, content) %>%
+  mutate(sittingDate="04-11-2020")
+```
+
+---
+## Your Turn
+
+Write a function to scrape any specified sitting dates
+
+---
+## Example 4: [Government Contracts](https://search.open.canada.ca/en/ct/?sort=score%20desc&page=1&search_text=deloitte)
+
+- Thanks Reut Marciano!
+
+- Combine disparate data entries into a table
+    - Scrape date, work description, and amount of all Deloitte contracts.
+
+```{r}
+myurl<-"https://search.open.canada.ca/en/ct/?sort=score%20desc&page=1&search_text=deloitte"
+
+mydates<-read_html(myurl) %>% html_nodes(".small") %>% html_text()
+
+mydesc<-read_html(myurl) %>% html_nodes("#org_value_lbl+ .col-sm-8") %>% html_text() %>% str_squish()
+
+myawards<-read_html(myurl) %>% html_nodes("h3") %>% html_text()
+myawards<-myawards[c(seq(from=2,to=50,by=2))]
+
+mytable<-cbind(date=mydates,desc=mydesc,award=myawards)
+mytable
+```
+---
+
+## Your Turn
+
+Write a function that will make the same table for the first 10 pages of search results
+
+
+

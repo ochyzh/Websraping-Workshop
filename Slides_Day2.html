@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="" xml:lang="">
+  <head>
+    <title>Webscraping</title>
+    <meta charset="utf-8" />
+    <meta name="author" content="Olga Chyzh [www.olgachyzh.com]" />
+    <link href="libs/remark-css/default.css" rel="stylesheet" />
+    <link href="libs/remark-css/default-fonts.css" rel="stylesheet" />
+  </head>
+  <body>
+    <textarea id="source">
+class: center, middle, inverse, title-slide
+
+# Webscraping
+## Day 2
+### Olga Chyzh [www.olgachyzh.com]
+
+---
+
+
+
+
+
+
+## Outline
+
+
+- Warm-up
+
+    - Example 1: 2020 US election returns
+    
+- Write loops and functions to scrape multiple pages: `for`, `lapply`
+    
+- Scraping Javascript (easy)
+
+    - Example 2: Covid-19 data
+
+- More Javascript (intermediate)
+
+    - Example 3: Parliament Transcripts
+
+- Practice extracting various elements, writing loops and functions
+
+    - Example 4: Government Contracts
+    
+- Dealing with multiple pages of search results
+
+Download all materials from [Github](https://github.com/ochyzh/Websraping-Workshop)
+
+Workshop 1 video posted [here](https://play.library.utoronto.ca/0de7f9b4b6295aafbee68a61e198c845)
+
+---
+## Required Packages
+
+Install all tidyverse packages:
+
+```r
+# check if you already have it
+library(tidyverse)
+library(magrittr)
+library(rvest)
+# if not:
+install.packages("tidyverse")
+library(tidyverse) # only calls the "core" of tidyverse
+```
+
+
+---
+## Example 1: Get 2020 US Election Returns in Utah
+
+- Step 1: find the relevant `url`
+
+
+```r
+library(tidyverse)
+library(magrittr)
+library(rvest)
+myurl&lt;-"https://electionresults.utah.gov/elections/countyCount/399789495"
+```
+
+- Step 2: Scrape the `html` code
+
+
+```r
+myhtml&lt;-read_html(myurl)
+```
+
+
+- Step 3: Find the relevant css-selector (I tried `#information`, then `.county-count-table`). Note that simply `table` also works.
+
+
+
+```r
+myhtml %&gt;% html_nodes(".county-count-table") 
+```
+
+```
+## {xml_nodeset (1)}
+## [1] &lt;table class="county-count-table"&gt;\n&lt;thead class="county-count-header"&gt;\n ...
+```
+---
+## Step 4: Use `html_table` to extract the table.
+
+
+```r
+myhtml %&gt;% html_nodes(".county-count-table") %&gt;% 
+  html_table(header=T) 
+```
+
+```
+## [[1]]
+##                                 U.S. President
+## 1      County BROCK PIERCE KARLA BALLARD (UNA)
+## 2       Total                             2623
+## 3      Beaver                                1
+## 4   Box Elder                               36
+## 5       Cache                              106
+## 6      Carbon                               25
+## 7     Daggett                                1
+## 8       Davis                              380
+## 9    Duchesne                                6
+## 10      Emery                                6
+## 11   Garfield                                3
+## 12      Grand                               15
+## 13       Iron                               40
+## 14       Juab                                3
+## 15       Kane                                7
+## 16    Millard                               14
+## 17     Morgan                               11
+## 18      Piute                                0
+## 19       Rich                                1
+## 20  Salt Lake                              947
+## 21   San Juan                               16
+## 22    Sanpete                               22
+## 23     Sevier                               13
+## 24     Summit                               17
+## 25     Tooele                               63
+## 26     Uintah                               16
+## 27       Utah                              521
+## 28    Wasatch                               20
+## 29 Washington                               81
+## 30      Wayne                                2
+## 31      Weber                              250
+##                        U.S. President                         U.S. President
+## 1  DON BLANKENSHIP WILLIAM MOHR (CON) DONALD J. TRUMP MICHAEL R. PENCE (REP)
+## 2                                5551                                 865140
+## 3                                   4                                   2695
+## 4                                 134                                  21548
+## 5                                 351                                  38032
+## 6                                  22                                   6693
+## 7                                   2                                    496
+## 8                                 827                                 104135
+## 9                                  21                                   7513
+## 10                                  4                                   4207
+## 11                                  3                                   2158
+## 12                                  5                                   2248
+## 13                                 88                                  18989
+## 14                                 16                                   5087
+## 15                                 16                                   2998
+## 16                                 26                                   5404
+## 17                                 21                                   5181
+## 18                                  1                                    773
+## 19                                  3                                   1157
+## 20                               1570                                 230174
+## 21                                 28                                   3535
+## 22                                 50                                  10459
+## 23                                 31                                   9052
+## 24                                 25                                  10252
+## 25                                181                                  21014
+## 26                                 56                                  13261
+## 27                               1375                                 192812
+## 28                                 53                                  10795
+## 29                                220                                  67294
+## 30                                  3                                   1229
+## 31                                415                                  65949
+##          U.S. President                    U.S. President
+## 1  GLORIA LA RIVA (UNA) HOWIE HAWKINS ANGELA WALKER (GRN)
+## 2                  1139                              5053
+## 3                     4                                 6
+## 4                    18                                55
+## 5                    54                               217
+## 6                     5                                18
+## 7                     0                                 0
+## 8                   118                               597
+## 9                     3                                 9
+## 10                    2                                 8
+## 11                    1                                11
+## 12                    1                                23
+## 13                   20                                78
+## 14                    1                                 5
+## 15                    0                                 8
+## 16                    1                                 5
+## 17                    0                                13
+## 18                    1                                 0
+## 19                    0                                 2
+## 20                  579                              2203
+## 21                    5                                17
+## 22                    7                                19
+## 23                    3                                14
+## 24                   12                                65
+## 25                   33                                81
+## 26                    5                                29
+## 27                  169                               853
+## 28                    7                                45
+## 29                   33                               187
+## 30                    2                                 3
+## 31                   55                               482
+##                     U.S. President                   U.S. President
+## 1  JO JORGENSEN JEREMY COHEN (LIB) JOE MCHUGH ELIZABETH STORM (UNA)
+## 2                            38447                             2229
+## 3                               23                                3
+## 4                              614                               33
+## 5                             1796                               98
+## 6                              151                               19
+## 7                                7                                0
+## 8                             5004                              330
+## 9                              107                                4
+## 10                              47                                4
+## 11                              37                                3
+## 12                              62                                6
+## 13                             666                               23
+## 14                              91                                4
+## 15                              51                                2
+## 16                              64                                6
+## 17                             160                                5
+## 18                               7                                0
+## 19                              14                                2
+## 20                           12219                              778
+## 21                              99                               19
+## 22                             215                               20
+## 23                             133                                4
+## 24                             367                               18
+## 25                             958                               81
+## 26                             226                               10
+## 27                           10377                              466
+## 28                             352                               34
+## 29                            1742                               72
+## 30                               9                                1
+## 31                            2849                              184
+##                            U.S. President                    U.S. President
+## 1  JOSEPH R. BIDEN KAMALA D. HARRIS (DEM) KANYE WEST MICHELLE TIDBALL (UNA)
+## 2                                  560282                              7213
+## 3                                     357                                 7
+## 4                                    4473                               112
+## 5                                   16650                               230
+## 6                                    2392                                44
+## 7                                     111                                 2
+## 8                                   57411                              1012
+## 9                                     843                                18
+## 10                                    572                                15
+## 11                                    514                                 2
+## 12                                   2806                                19
+## 13                                   4892                                94
+## 14                                    645                                13
+## 15                                   1083                                15
+## 16                                    624                                16
+## 17                                   1086                                35
+## 18                                     86                                 3
+## 19                                    180                                 4
+## 20                                 289906                              2590
+## 21                                   3113                                45
+## 22                                   1794                                39
+## 23                                   1084                                28
+## 24                                  15244                                86
+## 25                                   8943                               152
+## 26                                   1663                                37
+## 27                                  76033                              1680
+## 28                                   6187                                86
+## 29                                  20530                               298
+## 30                                    365                                 7
+## 31                                  40695                               524
+```
+
+
+---
+## Step 5: Clean Up 
+
+Just get the vote counts for Trump and Biden by county
+
+
+```r
+mydat&lt;- myhtml %&gt;% html_nodes(".county-count-table") %&gt;% 
+  html_table(header=F) %&gt;% extract2(1) 
+mydat&lt;-mydat[-c(1:3),c(1,4,9)]
+names(mydat)&lt;-c("County","Trump","Biden")
+mydat
+```
+
+```
+##        County  Trump  Biden
+## 4      Beaver   2695    357
+## 5   Box Elder  21548   4473
+## 6       Cache  38032  16650
+## 7      Carbon   6693   2392
+## 8     Daggett    496    111
+## 9       Davis 104135  57411
+## 10   Duchesne   7513    843
+## 11      Emery   4207    572
+## 12   Garfield   2158    514
+## 13      Grand   2248   2806
+## 14       Iron  18989   4892
+## 15       Juab   5087    645
+## 16       Kane   2998   1083
+## 17    Millard   5404    624
+## 18     Morgan   5181   1086
+## 19      Piute    773     86
+## 20       Rich   1157    180
+## 21  Salt Lake 230174 289906
+## 22   San Juan   3535   3113
+## 23    Sanpete  10459   1794
+## 24     Sevier   9052   1084
+## 25     Summit  10252  15244
+## 26     Tooele  21014   8943
+## 27     Uintah  13261   1663
+## 28       Utah 192812  76033
+## 29    Wasatch  10795   6187
+## 30 Washington  67294  20530
+## 31      Wayne   1229    365
+## 32      Weber  65949  40695
+```
+
+---
+## Your Turn (5 min)
+
+Scrape the Congressional Election returns from the same website
+
+
+---
+
+
+## Key Functions: `html_nodes`
+
+- `html_nodes(x, "path")` extracts all elements from the page `x` that have the tag / class / id `path`. (Use SelectorGadget to determine `path`.) 
+
+- `html_node()` does the same thing but only returns the first matching element. 
+- Can be chained
+
+
+```r
+myurl&lt;-"https://electionresults.utah.gov/elections/"
+read_html(myurl) %&gt;% 
+  html_nodes("p") %&gt;% # first get all the paragraphs 
+  html_nodes("a") # then get all the links in those paragraphs
+```
+---
+
+## Key Functions: `html_text`
+
+- `html_text(x)` extracts all text from the nodeset `x` 
+- Good for cleaning output
+
+
+```r
+read_html(myurl) %&gt;% 
+  html_nodes("p") %&gt;% # first get all the paragraphs 
+  html_nodes("a") %&gt;% # then get all the links in those paragraphs
+  html_text() # get the linked text only 
+
+myurl &lt;- "https://www.tripadvisor.ca/Attraction_Review-g155019-d155483-Reviews-CN_Tower-Toronto_Ontario.html"
+read_html(myurl) %&gt;% 
+  html_nodes(".cPQsENeY") %&gt;%
+  html_text()
+```
+
+---
+## Key Functions: `html_table` 
+
+- `html_table(x, header, fill)` - parse html table(s) from `x` into a data frame or list of data frames 
+- Structure of HTML makes finding and extracting tables easy!
+
+
+```r
+myurl&lt;-"https://electionresults.utah.gov/elections/countyCount/399789495"
+read_html(myurl) %&gt;% 
+  html_nodes("table") %&gt;% # get the tables 
+  html_table(header=F) %&gt;%
+  head() 
+```
+
+---
+## Example 2: CNN Covid-19 Data
+
+- Goal: scrape [CNN data](https://www.cnn.com/resources/coronavirus-information/) on daily US county-level Covid-19 cases going back to February 2020.
+
+- Problem: CNN asks you to input zip to see data for each state, no single downloadable data file.
+
+- Solution: write a program that will iteratively enter zip codes and scrape the raw data from source code.
+
+- Another (small) problem: the source code is in `Java`, not `HTML`
+
+---
+## Step 1: Get the `url`
+
+- Notice that the urls are of the pattern `https://www.cnn.com/resources/coronavirus-information/`+`US zip`
+
+- Start with Iowa (zip 50010), then loop over other states.
+
+
+```r
+myurl&lt;- "https://www.cnn.com/resources/coronavirus-information/50010"
+myhtml&lt;- read_html(myurl)  #technically not just html, but the command will still scrape the source code.
+```
+
+- The rest is just parsing the source code
+
+---
+## Step 2: Clean Up and Extract Data
+
+
+```r
+j&lt;-html_nodes(myhtml,"script#__NEXT_DATA__")  %&gt;%
+  html_text() #strip all html code 
+```
+
+- Use `library(jsonlite)` to convert `java` code to an `R` object
+
+
+```r
+library(jsonlite)
+j1&lt;-fromJSON(j)
+```
+
+---
+## Extract Information
+
+
+```r
+ia_cnties&lt;-ls(j1$props$pageProps$stateData$counties)
+
+#Get daily cases for one county in IA:
+adair_co_cases&lt;-j1$props$pageProps$stateData$counties$adair$confirmed_time
+
+#Get dates:
+library(lubridate)
+last_date&lt;-max(ymd(names(j1$props$pageProps$stateData$counties$adair$timeseries$confirmed))) #find out the last date for which the data are available
+mydates&lt;-seq(last_date-length(adair_co_cases)+1,last_date,1)
+adair&lt;-cbind.data.frame(county="adair",date=mydates,cases=adair_co_cases)
+```
+
+---
+## Write a loop to get all counties in IA:
+
+```r
+mydata&lt;-NULL
+for (i in ia_cnties){
+  d&lt;-j1$props$pageProps$stateData$counties[[i]]
+  num_cases&lt;-d$confirmed_time
+  mydates&lt;-seq(from=last_date-length(num_cases)+1,last_date,by=1)
+  d&lt;-cbind.data.frame(county=i,date=mydates,cases=num_cases)
+  mydata&lt;-rbind.data.frame(mydata,d)
+}
+
+library(ggplot2)
+ggplot(data=mydata, aes(x=date,y=cases, group=county))+geom_line()
+```
+
+
+
+
+---
+
+## Scraping Javascript (No Java Background)
+
+- Any information that shows up on your browser HAS TO BE be available for scraping.
+
+- The trick is to find the correct url, usually different from the one shown in your browser.
+
+- Example: (Singapore Parliamentary debates)[https://sprs.parl.gov.sg/search/home] (from Jiajia Zhou)
+
+- Go to the link, `Search`, click the first link, then `View this Sitting's Official Report in Full`
+
+- In Chrome, go to `More Tools`--&gt;`Developer Tools`--&gt;`Network` and refresh the page.
+
+---
+## Example 3: Singapore Parliamentary Debates
+
+&lt;img src="./images/Dev_tools.png" width="100%" /&gt;
+
+---
+## Singapore Parliamentary Debates
+
+```r
+myurl&lt;-"https://sprs.parl.gov.sg/search/getHansardReport/?sittingDate=04-11-2020"
+r&lt;-read_html(myurl) %&gt;% html_text()
+j1&lt;-fromJSON(r)#convert from Java to an R object
+
+mydat&lt;-j1$takesSectionVOList %&gt;% #extract the elements that contain the bills
+  select(title, subTitle, sectionType, content) %&gt;%
+  mutate(sittingDate="04-11-2020")
+```
+
+---
+## Your Turn
+
+Write a function to scrape any specified sitting dates
+
+---
+## Example 4: [Government Contracts](https://search.open.canada.ca/en/ct/?sort=score%20desc&amp;page=1&amp;search_text=deloitte)
+
+- Thanks Reut Marciano!
+
+- Combine disparate data entries into a table
+    - Scrape date, work description, and amount of all Deloitte contracts.
+
+
+```r
+myurl&lt;-"https://search.open.canada.ca/en/ct/?sort=score%20desc&amp;page=1&amp;search_text=deloitte"
+
+mydates&lt;-read_html(myurl) %&gt;% html_nodes(".small") %&gt;% html_text()
+
+mydesc&lt;-read_html(myurl) %&gt;% html_nodes("#org_value_lbl+ .col-sm-8") %&gt;% html_text() %&gt;% str_squish()
+
+myawards&lt;-read_html(myurl) %&gt;% html_nodes("h3") %&gt;% html_text()
+myawards&lt;-myawards[c(seq(from=2,to=50,by=2))]
+
+mytable&lt;-cbind(date=mydates,desc=mydesc,award=myawards)
+mytable
+```
+
+```
+##       date           
+##  [1,] "Jul. 20, 2017"
+##  [2,] "Jun. 15, 2015"
+##  [3,] "Feb. 20, 2018"
+##  [4,] "Mar. 30, 2017"
+##  [5,] "Mar. 12, 2019"
+##  [6,] "Dec. 20, 2018"
+##  [7,] "Sep. 20, 2017"
+##  [8,] "Mar. 28, 2018"
+##  [9,] "Mar. 4, 2020" 
+## [10,] "Nov. 6, 2018" 
+## [11,] "Dec. 22, 2011"
+## [12,] "Nov. 10, 2016"
+## [13,] "Mar. 5, 2020" 
+## [14,] "Jul. 29, 2019"
+## [15,] "Nov. 21, 2019"
+## [16,] "Jun. 13, 2019"
+## [17,] "May 24, 2017" 
+## [18,] "Feb. 16, 2018"
+## [19,] "May 28, 2018" 
+## [20,] "Mar. 27, 2019"
+## [21,] "Mar. 27, 2019"
+## [22,] "Feb. 27, 2017"
+## [23,] "Feb. 7, 2018" 
+## [24,] "Mar. 5, 2010" 
+## [25,] "Aug. 28, 2020"
+##       desc                                                                                                                              
+##  [1,] "Information technology and telecommunications consultants"                                                                       
+##  [2,] "Accounting and audit services (purchased from outs"                                                                              
+##  [3,] "Other professional services not elsewhere specified"                                                                             
+##  [4,] "Licence/Maintenance fees for Application Software (including COTS) and Application Development and Delivery Software"            
+##  [5,] "Management Consulting"                                                                                                           
+##  [6,] "Application Software (including COTS) and Application Development and Delivery Software"                                         
+##  [7,] "Autres services professionnels non précisés ailleurs - Services de conseils pour un centre opérationnel de sécurité informatique"
+##  [8,] "1285 – Application Software (including COTS) and Application Development and Delivery Software"                                  
+##  [9,] "License/Maintenance fees for Application Software (including COTS) and Application Development and Delivery Software"            
+## [10,] "Other Professional Services not Elsewhere Specified"                                                                             
+## [11,] "Software"                                                                                                                        
+## [12,] "Information technology and telecommunications consultants"                                                                       
+## [13,] "Client software related to Distributed Computing Environment (DCE)"                                                              
+## [14,] "Information technology and telecommunications consultants"                                                                       
+## [15,] "Management consulting"                                                                                                           
+## [16,] "Management consulting"                                                                                                           
+## [17,] "Other professional services"                                                                                                     
+## [18,] "Management consulting"                                                                                                           
+## [19,] "Management consulting"                                                                                                           
+## [20,] "Accounting and audit services"                                                                                                   
+## [21,] "PASS-SA Stream 3 &amp; 6"                                                                                                            
+## [22,] "Contract to review court registry data systems business case. Sole Sourced Contract."                                            
+## [23,] "Information Technology and Telecommunications Consultants"                                                                       
+## [24,] "Application Software (including COTS) and Application Development and Delivery Software"                                         
+## [25,] "Other Professional Services not Elsewhere Specified"                                                                             
+##       award           
+##  [1,] "$25,420.97"    
+##  [2,] "$85,428.00"    
+##  [3,] "$1,795,852.50" 
+##  [4,] "$40,680.00"    
+##  [5,] "$25,000.00"    
+##  [6,] "$21,741.77"    
+##  [7,] "$24,771.36"    
+##  [8,] "$21,741.77"    
+##  [9,] "$37,700.00"    
+## [10,] "$24,860.00"    
+## [11,] "Unspecified"   
+## [12,] "$186,450.00"   
+## [13,] "$170,008.50"   
+## [14,] "$3,294,779.51" 
+## [15,] "$39,324.00"    
+## [16,] "$24,860.00"    
+## [17,] "$86,073.75"    
+## [18,] "$147,971.25"   
+## [19,] "$429,011.25"   
+## [20,] "$133,340.00"   
+## [21,] "$133,340.00"   
+## [22,] "$25,000.00"    
+## [23,] "$23,476,702.59"
+## [24,] "$56,952.00"    
+## [25,] "$8,475,000.00"
+```
+---
+
+## Your Turn
+
+Write a function that will make the same table for the first 10 pages of search results
+    </textarea>
+<style data-target="print-only">@media screen {.remark-slide-container{display:block;}.remark-slide-scaler{box-shadow:none;}}</style>
+<script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+<script>var slideshow = remark.create({
+"highlightStyle": "github",
+"highlightLines": true,
+"countIncrementalSlides": false
+});
+if (window.HTMLWidgets) slideshow.on('afterShowSlide', function (slide) {
+  window.dispatchEvent(new Event('resize'));
+});
+(function(d) {
+  var s = d.createElement("style"), r = d.querySelector(".remark-slide-scaler");
+  if (!r) return;
+  s.type = "text/css"; s.innerHTML = "@page {size: " + r.style.width + " " + r.style.height +"; }";
+  d.head.appendChild(s);
+})(document);
+
+(function(d) {
+  var el = d.getElementsByClassName("remark-slides-area");
+  if (!el) return;
+  var slide, slides = slideshow.getSlides(), els = el[0].children;
+  for (var i = 1; i < slides.length; i++) {
+    slide = slides[i];
+    if (slide.properties.continued === "true" || slide.properties.count === "false") {
+      els[i - 1].className += ' has-continuation';
+    }
+  }
+  var s = d.createElement("style");
+  s.type = "text/css"; s.innerHTML = "@media print { .has-continuation { display: none; } }";
+  d.head.appendChild(s);
+})(document);
+// delete the temporary CSS (for displaying all slides initially) when the user
+// starts to view slides
+(function() {
+  var deleted = false;
+  slideshow.on('beforeShowSlide', function(slide) {
+    if (deleted) return;
+    var sheets = document.styleSheets, node;
+    for (var i = 0; i < sheets.length; i++) {
+      node = sheets[i].ownerNode;
+      if (node.dataset["target"] !== "print-only") continue;
+      node.parentNode.removeChild(node);
+    }
+    deleted = true;
+  });
+})();
+(function() {
+  "use strict"
+  // Replace <script> tags in slides area to make them executable
+  var scripts = document.querySelectorAll(
+    '.remark-slides-area .remark-slide-container script'
+  );
+  if (!scripts.length) return;
+  for (var i = 0; i < scripts.length; i++) {
+    var s = document.createElement('script');
+    var code = document.createTextNode(scripts[i].textContent);
+    s.appendChild(code);
+    var scriptAttrs = scripts[i].attributes;
+    for (var j = 0; j < scriptAttrs.length; j++) {
+      s.setAttribute(scriptAttrs[j].name, scriptAttrs[j].value);
+    }
+    scripts[i].parentElement.replaceChild(s, scripts[i]);
+  }
+})();
+(function() {
+  var links = document.getElementsByTagName('a');
+  for (var i = 0; i < links.length; i++) {
+    if (/^(https?:)?\/\//.test(links[i].getAttribute('href'))) {
+      links[i].target = '_blank';
+    }
+  }
+})();
+// adds .remark-code-has-line-highlighted class to <pre> parent elements
+// of code chunks containing highlighted lines with class .remark-code-line-highlighted
+(function(d) {
+  const hlines = d.querySelectorAll('.remark-code-line-highlighted');
+  const preParents = [];
+  const findPreParent = function(line, p = 0) {
+    if (p > 1) return null; // traverse up no further than grandparent
+    const el = line.parentElement;
+    return el.tagName === "PRE" ? el : findPreParent(el, ++p);
+  };
+
+  for (let line of hlines) {
+    let pre = findPreParent(line);
+    if (pre && !preParents.includes(pre)) preParents.push(pre);
+  }
+  preParents.forEach(p => p.classList.add("remark-code-has-line-highlighted"));
+})(document);</script>
+
+<script>
+slideshow._releaseMath = function(el) {
+  var i, text, code, codes = el.getElementsByTagName('code');
+  for (i = 0; i < codes.length;) {
+    code = codes[i];
+    if (code.parentNode.tagName !== 'PRE' && code.childElementCount === 0) {
+      text = code.textContent;
+      if (/^\\\((.|\s)+\\\)$/.test(text) || /^\\\[(.|\s)+\\\]$/.test(text) ||
+          /^\$\$(.|\s)+\$\$$/.test(text) ||
+          /^\\begin\{([^}]+)\}(.|\s)+\\end\{[^}]+\}$/.test(text)) {
+        code.outerHTML = code.innerHTML;  // remove <code></code>
+        continue;
+      }
+    }
+    i++;
+  }
+};
+slideshow._releaseMath(document);
+</script>
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+(function () {
+  var script = document.createElement('script');
+  script.type = 'text/javascript';
+  script.src  = 'https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-MML-AM_CHTML';
+  if (location.protocol !== 'file:' && /^https?:/.test(script.src))
+    script.src  = script.src.replace(/^https?:/, '');
+  document.getElementsByTagName('head')[0].appendChild(script);
+})();
+</script>
+  </body>
+</html>
