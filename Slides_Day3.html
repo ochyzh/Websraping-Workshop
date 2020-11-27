@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="" xml:lang="">
+  <head>
+    <title>Webscraping</title>
+    <meta charset="utf-8" />
+    <meta name="author" content="Olga Chyzh [www.olgachyzh.com]" />
+    <link href="libs/remark-css/default.css" rel="stylesheet" />
+    <link href="libs/remark-css/default-fonts.css" rel="stylesheet" />
+  </head>
+  <body>
+    <textarea id="source">
+class: center, middle, inverse, title-slide
+
+# Webscraping
+## Day 3
+### Olga Chyzh [www.olgachyzh.com]
+
+---
+
+
+
+
+
+
+## Outline
+
+    
+- Scraping Javascript 
+
+- Working with non-rectangular data structures
+
+- Practice extracting various elements, writing loops and functions
+
+- Dealing with multiple pages of search results
+
+Download all materials from [Github](https://github.com/ochyzh/Websraping-Workshop)
+
+Workshop 1 video posted [here](https://play.library.utoronto.ca/0de7f9b4b6295aafbee68a61e198c845)
+
+Workshop 2 video posted [here](https://play.library.utoronto.ca/cc3ebb18816bfdcf8be7686bf060385b)
+
+---
+## Required Packages
+
+Install all tidyverse packages:
+
+```r
+# check if you already have it
+library(tidyverse)
+library(magrittr)
+library(rvest)
+library(jsonlite) #converts java code to R objects
+# if not:
+install.packages("tidyverse")
+library(tidyverse) # only calls the "core" of tidyverse
+```
+
+
+---
+
+## Scrape CNN Covid-19 Data
+
+- Notice that the urls are of the pattern `https://www.cnn.com/resources/coronavirus-information/`+`US zip`
+
+- Start with Iowa (zip 50010), then loop over other states.
+
+
+```r
+myurl&lt;-"https://www.cnn.com/resources/coronavirus-information/50010"
+j1&lt;- read_html(myurl) %&gt;% html_nodes("script#__NEXT_DATA__") %&gt;% html_text() %&gt;% fromJSON()  
+```
+
+- The rest is just parsing the source code
+
+---
+
+## Extract Information
+
+- Notice that `j1` is not a traditional rectangular data object.
+
+- We need to find the "path" to the data we need within this object
+
+    - Turns out county level covid-19 cases are in `j1$props$pageProps$stateData$counties`
+    
+    - The rest is clutter that is slowing down R
+
+- Also, CNN did not code a date variable
+    
+    - Instead, dates are the names of the variable called `timeseries$confirmed`
+
+- We can extract all of these pieces and organize them in a convenient way.
+
+---
+## Extract Information
+
+
+```r
+library(lubridate) #to work with dates
+
+j1&lt;-j1$props$pageProps$stateData$counties #reduce the large object to just the county-level data
+ia_cnties&lt;-ls(j1) #get county names
+
+#Get daily cases for one county in IA:
+adair_cum_cases&lt;-j1$adair$confirmed_time #get the variable that records covid cases over time
+adair_cum_deaths&lt;-j1$adair$deaths_time
+
+#Get dates:
+last_date&lt;-max(ymd(names(j1$adair$timeseries$confirmed))) #find out the last date for which the data are available
+
+mydates&lt;-seq(last_date-length(adair_cum_deaths)+1,last_date,1)
+adair&lt;-cbind.data.frame(county="adair",fips=j1$adair$fips, state=j1$adair$state, date=mydates,cases=c(0,adair_cum_cases), deaths=adair_cum_deaths)
+```
+
+---
+## Write a loop to get all counties in IA:
+
+```r
+ia_cnties&lt;-ia_cnties[-c(73,89)] #notice that some counties are not actually counties
+
+mydata&lt;-NULL
+for (i in ia_cnties){
+  d&lt;-j1[[i]]
+  cum_cases&lt;-d$confirmed_time
+  cum_deaths&lt;-d$deaths_time
+  mydates&lt;-seq(from=(last_date-length(cum_deaths)+1),to=last_date,by=1)
+  d&lt;-cbind.data.frame(fips=d$fips,state=d$state,county=i,date=mydates,cum_cases=c(0,cum_cases),cum_deaths=cum_deaths)
+  mydata&lt;-rbind.data.frame(mydata,d)
+}
+
+library(ggplot2)
+ggplot(data=mydata, aes(x=date,y=cum_cases, group=county))+geom_line()+theme_bw()
+```
+
+---
+
+## Scraping Javascript (No Java Background)
+
+- Any information that shows up on your browser HAS TO BE be available for scraping.
+
+- The trick is to find the correct url, usually different from the one shown in your browser.
+
+- Example: (Singapore Parliamentary debates)[https://sprs.parl.gov.sg/search/home] (from Jiajia Zhou)
+
+- Go to the link, `Search`, click the first link, then `View this Sitting's Official Report in Full`
+
+- In Chrome, go to `More Tools`--&gt;`Developer Tools`--&gt;`Network` and refresh the page.
+
+---
+## Example 3: Singapore Parliamentary Debates
+
+&lt;img src="./images/Dev_tools.png" width="100%" /&gt;
+
+---
+## Singapore Parliamentary Debates
+
+```r
+myurl&lt;-"https://sprs.parl.gov.sg/search/getHansardReport/?sittingDate=04-11-2020"
+r&lt;-read_html(myurl) %&gt;% html_text()
+j1&lt;-fromJSON(r)#convert from Java to an R object
+
+mydat&lt;-j1$takesSectionVOList %&gt;% #extract the elements that contain the bills
+  select(title, subTitle, sectionType, content) %&gt;%
+  mutate(sittingDate="04-11-2020")
+```
+
+---
+## Your Turn
+
+Write a function to scrape any specified sitting dates
+
+---
+## Example 4: [Government Contracts](https://search.open.canada.ca/en/ct/?sort=score%20desc&amp;page=1&amp;search_text=deloitte)
+
+- Thanks Reut Marciano!
+
+- Combine disparate data entries into a table
+    - Scrape date, work description, and amount of all Deloitte contracts.
+
+
+```r
+myurl&lt;-"https://search.open.canada.ca/en/ct/?sort=score%20desc&amp;page=1&amp;search_text=deloitte"
+
+mydates&lt;-read_html(myurl) %&gt;% html_nodes(".small") %&gt;% html_text()
+
+mydesc&lt;-read_html(myurl) %&gt;% html_nodes("#org_value_lbl+ .col-sm-8") %&gt;% html_text() %&gt;% str_squish()
+
+myawards&lt;-read_html(myurl) %&gt;% html_nodes("h3") %&gt;% html_text()
+myawards&lt;-myawards[c(seq(from=2,to=50,by=2))]
+
+mytable&lt;-cbind(date=mydates,desc=mydesc,award=myawards)
+mytable
+```
+---
+
+## Your Turn
+
+Write a function that will make the same table for the first 10 pages of search results
+    </textarea>
+<style data-target="print-only">@media screen {.remark-slide-container{display:block;}.remark-slide-scaler{box-shadow:none;}}</style>
+<script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+<script>var slideshow = remark.create({
+"highlightStyle": "github",
+"highlightLines": true,
+"countIncrementalSlides": false
+});
+if (window.HTMLWidgets) slideshow.on('afterShowSlide', function (slide) {
+  window.dispatchEvent(new Event('resize'));
+});
+(function(d) {
+  var s = d.createElement("style"), r = d.querySelector(".remark-slide-scaler");
+  if (!r) return;
+  s.type = "text/css"; s.innerHTML = "@page {size: " + r.style.width + " " + r.style.height +"; }";
+  d.head.appendChild(s);
+})(document);
+
+(function(d) {
+  var el = d.getElementsByClassName("remark-slides-area");
+  if (!el) return;
+  var slide, slides = slideshow.getSlides(), els = el[0].children;
+  for (var i = 1; i < slides.length; i++) {
+    slide = slides[i];
+    if (slide.properties.continued === "true" || slide.properties.count === "false") {
+      els[i - 1].className += ' has-continuation';
+    }
+  }
+  var s = d.createElement("style");
+  s.type = "text/css"; s.innerHTML = "@media print { .has-continuation { display: none; } }";
+  d.head.appendChild(s);
+})(document);
+// delete the temporary CSS (for displaying all slides initially) when the user
+// starts to view slides
+(function() {
+  var deleted = false;
+  slideshow.on('beforeShowSlide', function(slide) {
+    if (deleted) return;
+    var sheets = document.styleSheets, node;
+    for (var i = 0; i < sheets.length; i++) {
+      node = sheets[i].ownerNode;
+      if (node.dataset["target"] !== "print-only") continue;
+      node.parentNode.removeChild(node);
+    }
+    deleted = true;
+  });
+})();
+(function() {
+  "use strict"
+  // Replace <script> tags in slides area to make them executable
+  var scripts = document.querySelectorAll(
+    '.remark-slides-area .remark-slide-container script'
+  );
+  if (!scripts.length) return;
+  for (var i = 0; i < scripts.length; i++) {
+    var s = document.createElement('script');
+    var code = document.createTextNode(scripts[i].textContent);
+    s.appendChild(code);
+    var scriptAttrs = scripts[i].attributes;
+    for (var j = 0; j < scriptAttrs.length; j++) {
+      s.setAttribute(scriptAttrs[j].name, scriptAttrs[j].value);
+    }
+    scripts[i].parentElement.replaceChild(s, scripts[i]);
+  }
+})();
+(function() {
+  var links = document.getElementsByTagName('a');
+  for (var i = 0; i < links.length; i++) {
+    if (/^(https?:)?\/\//.test(links[i].getAttribute('href'))) {
+      links[i].target = '_blank';
+    }
+  }
+})();
+// adds .remark-code-has-line-highlighted class to <pre> parent elements
+// of code chunks containing highlighted lines with class .remark-code-line-highlighted
+(function(d) {
+  const hlines = d.querySelectorAll('.remark-code-line-highlighted');
+  const preParents = [];
+  const findPreParent = function(line, p = 0) {
+    if (p > 1) return null; // traverse up no further than grandparent
+    const el = line.parentElement;
+    return el.tagName === "PRE" ? el : findPreParent(el, ++p);
+  };
+
+  for (let line of hlines) {
+    let pre = findPreParent(line);
+    if (pre && !preParents.includes(pre)) preParents.push(pre);
+  }
+  preParents.forEach(p => p.classList.add("remark-code-has-line-highlighted"));
+})(document);</script>
+
+<script>
+slideshow._releaseMath = function(el) {
+  var i, text, code, codes = el.getElementsByTagName('code');
+  for (i = 0; i < codes.length;) {
+    code = codes[i];
+    if (code.parentNode.tagName !== 'PRE' && code.childElementCount === 0) {
+      text = code.textContent;
+      if (/^\\\((.|\s)+\\\)$/.test(text) || /^\\\[(.|\s)+\\\]$/.test(text) ||
+          /^\$\$(.|\s)+\$\$$/.test(text) ||
+          /^\\begin\{([^}]+)\}(.|\s)+\\end\{[^}]+\}$/.test(text)) {
+        code.outerHTML = code.innerHTML;  // remove <code></code>
+        continue;
+      }
+    }
+    i++;
+  }
+};
+slideshow._releaseMath(document);
+</script>
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+(function () {
+  var script = document.createElement('script');
+  script.type = 'text/javascript';
+  script.src  = 'https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-MML-AM_CHTML';
+  if (location.protocol !== 'file:' && /^https?:/.test(script.src))
+    script.src  = script.src.replace(/^https?:/, '');
+  document.getElementsByTagName('head')[0].appendChild(script);
+})();
+</script>
+  </body>
+</html>

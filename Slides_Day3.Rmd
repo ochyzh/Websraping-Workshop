@@ -1,0 +1,206 @@
+---
+title: Webscraping 
+subtitle: Day 3
+author: "Olga Chyzh [www.olgachyzh.com]"
+output:
+  xaringan::moon_reader:
+    lib_dir: libs
+    nature:
+      highlightStyle: github
+      highlightLines: true
+      countIncrementalSlides: false
+exclude: true
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r  setup, message=FALSE, warning=FALSE, include=FALSE}
+options(
+  htmltools.dir.version = FALSE, # for blogdown
+  width = 80,
+  tibble.width = 80
+)
+
+knitr::opts_chunk$set(
+  fig.align = "center",  warning=FALSE, message=FALSE
+)
+
+```
+
+
+
+## Outline
+
+    
+- Scraping Javascript 
+
+- Working with non-rectangular data structures
+
+- Practice extracting various elements, writing loops and functions
+
+- Dealing with multiple pages of search results
+
+Download all materials from [Github](https://github.com/ochyzh/Websraping-Workshop)
+
+Workshop 1 video posted [here](https://play.library.utoronto.ca/0de7f9b4b6295aafbee68a61e198c845)
+
+Workshop 2 video posted [here](https://play.library.utoronto.ca/cc3ebb18816bfdcf8be7686bf060385b)
+
+---
+## Required Packages
+
+Install all tidyverse packages:
+```{r gettv, echo = T, eval = FALSE}
+# check if you already have it
+library(tidyverse)
+library(magrittr)
+library(rvest)
+library(jsonlite) #converts java code to R objects
+# if not:
+install.packages("tidyverse")
+library(tidyverse) # only calls the "core" of tidyverse
+
+```
+
+
+---
+
+## Scrape CNN Covid-19 Data
+
+- Notice that the urls are of the pattern `https://www.cnn.com/resources/coronavirus-information/`+`US zip`
+
+- Start with Iowa (zip 50010), then loop over other states.
+
+```{r, eval=F}
+myurl<-"https://www.cnn.com/resources/coronavirus-information/50010"
+j1<- read_html(myurl) %>% html_nodes("script#__NEXT_DATA__") %>% html_text() %>% fromJSON()  
+
+```
+
+- The rest is just parsing the source code
+
+---
+
+## Extract Information
+
+- Notice that `j1` is not a traditional rectangular data object.
+
+- We need to find the "path" to the data we need within this object
+
+    - Turns out county level covid-19 cases are in `j1$props$pageProps$stateData$counties`
+    
+    - The rest is clutter that is slowing down R
+
+- Also, CNN did not code a date variable
+    
+    - Instead, dates are the names of the variable called `timeseries$confirmed`
+
+- We can extract all of these pieces and organize them in a convenient way.
+
+---
+## Extract Information
+
+```{r, eval=F}
+library(lubridate) #to work with dates
+
+j1<-j1$props$pageProps$stateData$counties #reduce the large object to just the county-level data
+ia_cnties<-ls(j1) #get county names
+
+#Get daily cases for one county in IA:
+adair_cum_cases<-j1$adair$confirmed_time #get the variable that records covid cases over time
+adair_cum_deaths<-j1$adair$deaths_time
+
+#Get dates:
+last_date<-max(ymd(names(j1$adair$timeseries$confirmed))) #find out the last date for which the data are available
+
+mydates<-seq(last_date-length(adair_cum_deaths)+1,last_date,1)
+adair<-cbind.data.frame(county="adair",fips=j1$adair$fips, state=j1$adair$state, date=mydates,cases=c(0,adair_cum_cases), deaths=adair_cum_deaths)
+```
+
+---
+## Write a loop to get all counties in IA:
+```{r, eval=F}
+
+ia_cnties<-ia_cnties[-c(73,89)] #notice that some counties are not actually counties
+
+mydata<-NULL
+for (i in ia_cnties){
+  d<-j1[[i]]
+  cum_cases<-d$confirmed_time
+  cum_deaths<-d$deaths_time
+  mydates<-seq(from=(last_date-length(cum_deaths)+1),to=last_date,by=1)
+  d<-cbind.data.frame(fips=d$fips,state=d$state,county=i,date=mydates,cum_cases=c(0,cum_cases),cum_deaths=cum_deaths)
+  mydata<-rbind.data.frame(mydata,d)
+}
+
+library(ggplot2)
+ggplot(data=mydata, aes(x=date,y=cum_cases, group=county))+geom_line()+theme_bw()+scale_x_date("")+scale_y_continuous("Covid-19 Cumulative Cases for Iowa Counties")
+```
+
+---
+
+## Scraping Javascript (No Java Background)
+
+- Any information that shows up on your browser HAS TO BE be available for scraping.
+
+- The trick is to find the correct url, usually different from the one shown in your browser.
+
+- Example: (Singapore Parliamentary debates)[https://sprs.parl.gov.sg/search/home] (from Jiajia Zhou)
+
+- Go to the link, `Search`, click the first link, then `View this Sitting's Official Report in Full`
+
+- In Chrome, go to `More Tools`-->`Developer Tools`-->`Network` and refresh the page.
+
+---
+## Example 3: Singapore Parliamentary Debates
+
+```{r echo=FALSE, out.width='100%', fig.show='hold', fig.align='default'}
+knitr::include_graphics('./images/Dev_tools.png', auto_pdf = FALSE)
+```  
+
+---
+## Singapore Parliamentary Debates
+```{r, eval=F}
+myurl<-"https://sprs.parl.gov.sg/search/getHansardReport/?sittingDate=04-11-2020"
+r<-read_html(myurl) %>% html_text()
+j1<-fromJSON(r)#convert from Java to an R object
+
+mydat<-j1$takesSectionVOList %>% #extract the elements that contain the bills
+  select(title, subTitle, sectionType, content) %>%
+  mutate(sittingDate="04-11-2020")
+```
+
+---
+## Your Turn
+
+Write a function to scrape any specified sitting dates
+
+---
+## Example 4: [Government Contracts](https://search.open.canada.ca/en/ct/?sort=score%20desc&page=1&search_text=deloitte)
+
+- Thanks Reut Marciano!
+
+- Combine disparate data entries into a table
+    - Scrape date, work description, and amount of all Deloitte contracts.
+
+```{r, eval=F}
+myurl<-"https://search.open.canada.ca/en/ct/?sort=score%20desc&page=1&search_text=deloitte"
+
+mydates<-read_html(myurl) %>% html_nodes(".small") %>% html_text()
+
+mydesc<-read_html(myurl) %>% html_nodes("#org_value_lbl+ .col-sm-8") %>% html_text() %>% str_squish()
+
+myawards<-read_html(myurl) %>% html_nodes("h3") %>% html_text()
+myawards<-myawards[c(seq(from=2,to=50,by=2))]
+
+mytable<-cbind(date=mydates,desc=mydesc,award=myawards)
+mytable
+```
+---
+
+## Your Turn
+
+Write a function that will make the same table for the first 10 pages of search results
+
+
+
