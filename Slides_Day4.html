@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="" xml:lang="">
+  <head>
+    <title>Downloading Twitter Data</title>
+    <meta charset="utf-8" />
+    <meta name="author" content="Olga Chyzh [www.olgachyzh.com]" />
+    <link href="libs/remark-css/default.css" rel="stylesheet" />
+    <link href="libs/remark-css/default-fonts.css" rel="stylesheet" />
+  </head>
+  <body>
+    <textarea id="source">
+class: center, middle, inverse, title-slide
+
+# Downloading Twitter Data
+## Day 4
+### Olga Chyzh [www.olgachyzh.com]
+
+---
+
+
+
+
+
+
+## Outline
+
+    
+- Make a Twitter App
+
+- Use `rtweet` to download Twitter data
+
+Download all materials from [Github](https://github.com/ochyzh/Websraping-Workshop)
+
+Workshop 1 video posted [here](https://play.library.utoronto.ca/0de7f9b4b6295aafbee68a61e198c845)
+
+Workshop 2 video posted [here](https://play.library.utoronto.ca/cc3ebb18816bfdcf8be7686bf060385b)
+
+Workshop 3 video posted [here](https://play.library.utoronto.ca/5646bdd009c7b8f905855e8e8b272e49)
+
+
+---
+## Required Packages
+
+Install all tidyverse packages:
+
+```r
+# check if you already have it
+library(tidyverse)
+library(magrittr)
+library(rtweet)
+library(lubridate)
+library(ggplot2)
+library(stringr)
+library(igraph)
+
+# if not:
+#install.packages("rtweet")
+#library(rtweet) # only calls the "core" of tidyverse
+
+#Or install the development version:
+#devtools::install_github("mkearney/rtweet")
+```
+
+
+---
+
+## Some Background
+
+- Many websites use APIs (application protocol interfaces) to manage and organize their data.
+
+- These are often public (or allow authorized users), so we can use them to obtain data.
+
+- Twitter, Facebook, Reddit, the World Bank website, the US Census Website
+
+- App-specific R packages to make it easy: `rtweet`, `Rfacebook` `RedditExtractoR` 
+
+---
+## Twitter APIs
+
+- Connecting to Twitter's API requires access tokens: **api key**, **api secret key**, **access token**, **access token secret**
+
+- Need a Twitter Developer Account
+
+- If don't have one, follow the instructions outlined here:
+
+
+```r
+vignette("auth", package = "rtweet")
+```
+
+- Once you have an account, log in, make an app, give it a name, and copy the following four elements: `api_key`, `api_secret_key`, `access_token`, `access_token_secret`
+
+---
+
+#These Are MINE, Get Your Own!
+
+```r
+api_key &lt;- "abXXRlapnqfhMDhA3n1t00GXaxx"
+api_secret_key &lt;- "eyh24B5i8ETIxTGopOL0mQoFnirLnotVEdWeUVTI0eVrXmKwAYxx"
+access_token &lt;- "4882273461-PLspkkkZEndhlaJ00uXpQ36KQCK3RefzU61fQACxx"
+access_token_secret&lt;-"2ZXjFiwVNEjKPFnWFFxoI3n0Ar0O5Zlio3MyoE1Uc4M4dxx"
+
+
+## authenticate via web browser
+token &lt;- create_token(
+  app = "Olgas_scraper",
+  consumer_key = api_key,
+  consumer_secret = api_secret_key,
+  access_token = access_token,
+  access_secret = access_token_secret,
+  set_renv = TRUE)
+```
+
+---
+
+## Friends/Followers
+
+- Twitter [API documentation](https://developer.twitter.com/en/docs/twitter-api/v1/data-dictionary/overview/user-object) distinguishes between *friends* and *followers*
+
+    - *friend* an account a user follows: a limit of 5000
+    
+    - *follower* account that follows a user: no limit
+    
+
+
+```r
+friends&lt;-get_friends("olga_chyzh", parse=TRUE)
+friends
+
+followers&lt;-get_followers("olga_chyzh")
+followers
+
+#for accounts with large followings:
+flwrs&lt;-get_followers("NateSilver538",n=10000, retryonratelimit = TRUE)
+```
+    
+---
+
+## Tell Me Who Your Friends Are
+
+
+```r
+olgas_followers&lt;-lookup_users(followers$user_id)
+olgas_followers&lt;-select(olgas_followers, user_id, screen_name, description)
+```
+
+- Do my friends know each other? 
+
+
+```r
+lookup_friendships("Pearson_ink","BlaxlandJoel")
+```
+---
+## Make a Network of My First 100 Friends
+
+
+```r
+olgas_followers&lt;-olgas_followers[1:100,]
+
+#Match each friend with each other friend
+friends_net&lt;-expand.grid(screen_name1=olgas_followers$screen_name,screen_name2=olgas_followers$screen_name)
+
+#Add ids and descriptions
+friends_net&lt;-friends_net %&gt;% 
+  left_join(olgas_followers, by=c("screen_name1"="screen_name")) %&gt;% 
+  select(user_id1=user_id, desc1=description, everything()) %&gt;% 
+  left_join(olgas_followers, by=c("screen_name2"="screen_name")) %&gt;%
+  select(user_id1, user_id2=user_id, screen_name1 , screen_name2, desc2=description, everything()) 
+```
+
+---
+
+## Write a Loop to Get Links  
+
+```r
+link&lt;-NULL
+for (i in 1:nrow(friends_net)) {
+     tryCatch({
+  scrnm1&lt;-friends_net[i,3]
+  scrnm2&lt;-friends_net[i,4]
+  if (scrnm1!=scrnm2){
+  fr1&lt;-lookup_friendships(scrnm1,scrnm2)
+  link[i]&lt;-ifelse(fr1$value[4]=="TRUE",1,0) #If friend 1 follows friend 2
+    } else {link[i]&lt;-NA}
+   }, error = function(e) {
+      cat("rate limit reached on user: ", i, ", user skipped", fill=TRUE)
+     Sys.sleep(901)
+     
+    }
+  )
+} 
+
+friends_net$link&lt;-NA
+friends_net$link&lt;-link
+saveRDS(friends_net,"friends_net.rds")
+```
+
+---
+
+## Rate Limits
+
+- Twitter limits how much data you can download at once.
+
+- Use `rate_limit` to find out what the limits are.
+
+
+```r
+rate_limit(token = NULL, query = "lookup_friendships", parse = TRUE)
+```
+
+- Use `Sys.sleep()` to have your loop/program pause once it reaches the rate limit, wait it out and restart.
+
+---
+## A Network of My Friends
+
+
+```r
+friends_net&lt;-readRDS("friends_net.rds")
+elist&lt;-friends_net %&gt;% filter(link==1) %&gt;% select(screen_name1,screen_name2)
+p&lt;-graph_from_edgelist(as.matrix(elist))
+plot(p, vertex.color="turquoise", vertex.size=10, vertex.label=NA)
+```
+
+&lt;img src="Slides_Day4_files/figure-html/unnamed-chunk-9-1.png" width="400px" style="display: block; margin: auto;" /&gt;
+
+---
+
+## Why Do My Friends Know Each Other?
+
+```r
+olgas_followers&lt;-readRDS("olgas_followers.rds")
+olgas_followers &lt;-olgas_followers %&gt;% mutate(description=str_to_lower(description),
+                           academ=as.numeric(str_detect(description, "professor")==TRUE |
+                                                          str_detect(description, "scientist")==TRUE|
+                                                           str_detect(description, "polsci")==TRUE |
+                                                           str_detect(description, "polisci")==TRUE |
+                                                           str_detect(description, "phd")==TRUE |
+                                                           str_detect(description, "political")==TRUE
+                                                           ))
+```
+---
+
+## A Network of My Friends
+
+
+```r
+mynodes&lt;-as.data.frame(get.vertex.attribute(p)$name)  #get node names in order
+names(mynodes)&lt;-"screen_name" 
+mynodes %&gt;% left_join(olgas_followers, by="screen_name") %&gt;% mutate(academ=replace_na(academ,0)) -&gt; mynodes #merge in academ
+p&lt;-set_vertex_attr(p, "academ", value=mynodes$academ) #set academ as a vertex attribute
+V(p)[V(p)$academ == 1]$color &lt;- "purple"
+V(p)[V(p)$academ == 0]$color &lt;- "turquoise"
+plot(p,  vertex.size=10,  vertex.label=NA, layout=layout.circle)
+```
+---
+## A Network of My Friends
+
+&lt;img src="Slides_Day4_files/figure-html/unnamed-chunk-12-1.png" style="display: block; margin: auto;" /&gt;
+
+---
+
+## Who Are My Non-Academic Friends?
+
+
+```r
+mynodes1&lt;- mynodes %&gt;% filter(academ==0) 
+elist1&lt;-friends_net %&gt;% filter((screen_name1 %in% mynodes1$screen_name) &amp; (screen_name2 %in% mynodes1$screen_name) &amp; link==1) %&gt;% select(screen_name1,screen_name2)
+p&lt;-graph_from_edgelist(as.matrix(elist1))
+plot(p,  vertex.size=10, vertex.color="turquoise", vertex.label.dist=2)
+```
+
+&lt;img src="Slides_Day4_files/figure-html/unnamed-chunk-13-1.png" width="400px" style="display: block; margin: auto;" /&gt;
+
+
+---
+## User Timelines
+
+Specify a user ID or screen name and the number of tweets (max of 3200)
+
+
+```r
+olgas_tl&lt;-get_timeline("olga_chyzh",n=3200) 
+olgas_tl&lt;-olgas_tl %&gt;% 
+  mutate(t=ymd_hms(created_at, tz="GMT") , t_ET=with_tz(t,"America/New_York"), hr=hour(t_ET), min=minute(t_ET), time=round((hr*60+min)/5)*5) %&gt;% 
+  group_by(time) %&gt;%
+  summarise(freq=length(time), .groups="keep") 
+
+olgas_tl %&gt;%  ggplot(aes(x=time,y=freq))+geom_line()+ geom_point()+ scale_x_continuous("",breaks=seq(from=0, to=1380, by=60),labels=seq(from=0,to=23, by=1)) + scale_y_continuous("")+coord_polar() +theme_bw()
+table(olgas_tl$freq)
+```
+---
+
+## When Do I Tweet? When Do I Sleep?
+
+&lt;img src="Slides_Day4_files/figure-html/unnamed-chunk-15-1.png" style="display: block; margin: auto;" /&gt;
+
+
+---
+
+## A Timeline of a Bot
+
+
+```r
+bot_tl&lt;-get_timeline("American__Voter",n=3200) 
+bot_tl&lt;-bot_tl %&gt;% 
+  mutate(t=ymd_hms(created_at, tz="GMT") , t_ET=with_tz(t,"America/New_York"), hr=hour(t_ET), min=minute(t_ET), time=round((hr*60+min)/5)*5) %&gt;% 
+  group_by(time) %&gt;%
+  summarise(freq=length(time), .groups="keep") 
+
+bot_tl %&gt;%  ggplot(aes(x=time,y=freq))+geom_line()+ geom_point()+ scale_x_continuous("",limits=c(0, 1440),breaks=seq(from=0, to=1380, by=60),labels=seq(from=0,to=23, by=1)) + scale_y_continuous("")+coord_polar() +theme_bw()
+
+table(bot_tl$freq)
+```
+---
+
+## Does American__Voter Sleep?
+
+&lt;img src="Slides_Day4_files/figure-html/unnamed-chunk-17-1.png" style="display: block; margin: auto;" /&gt;
+
+
+---
+
+## Tell Me Who Your Friends Are
+
+
+```r
+library(parallel)
+tl_scraper&lt;-function(scrnm){
+  tryCatch({
+  d&lt;-get_timeline(scrnm,n=1000)
+    }, error = function(e) {
+      cat(" problem user: ", scrnm, ", user skipped", fill=T)
+      })
+}
+
+fol_list&lt;-c("andrewheiss","burrelvannjr","CarrieAKJohnson","decustecu","HawkInATX","kristinerudolph","MortazaAbbasi", "shifrinson")
+olgas_fol_tl&lt;-do.call(rbind,mclapply(fol_list,tl_scraper))
+saveRDS(olgas_fol_tl, "olgas_fol_tl.rds")
+```
+
+---
+## Tell Me Who Your Friends Are
+
+```r
+olgas_fol_tl %&gt;% 
+  mutate(t=ymd_hms(created_at, tz="GMT") , t_ET=with_tz(t,"America/New_York"), hr=hour(t_ET), min=minute(t_ET), time=round((hr*60+min)/10)*10) %&gt;% 
+  group_by(time, screen_name) %&gt;%
+  summarise(freq=length(time), .groups="keep") %&gt;%  ggplot(aes(x=time,y=freq))+
+  geom_line()+ 
+  geom_point() + 
+  facet_wrap(~screen_name)+ 
+  scale_x_continuous("",limits=c(0, 1440),breaks=seq(from=0, to=1380, by=60),labels=seq(from=0,to=23, by=1))+
+  scale_y_continuous("")+
+  coord_polar() +
+  theme_bw()
+```
+---
+
+## Tell Me Who Your Friends Are
+&lt;img src="Slides_Day4_files/figure-html/unnamed-chunk-20-1.png" width="400px" style="display: block; margin: auto;" /&gt;
+
+---
+## Likes
+
+
+```r
+olgas_favs &lt;- get_favorites("olga_chyzh", n = 3000) #max is 3000
+ts_plot(olgas_favs, "10 days")+theme_bw()
+```
+
+&lt;img src="Slides_Day4_files/figure-html/unnamed-chunk-22-1.png" width="400px" style="display: block; margin: auto;" /&gt;
+    </textarea>
+<style data-target="print-only">@media screen {.remark-slide-container{display:block;}.remark-slide-scaler{box-shadow:none;}}</style>
+<script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+<script>var slideshow = remark.create({
+"highlightStyle": "github",
+"highlightLines": true,
+"countIncrementalSlides": false
+});
+if (window.HTMLWidgets) slideshow.on('afterShowSlide', function (slide) {
+  window.dispatchEvent(new Event('resize'));
+});
+(function(d) {
+  var s = d.createElement("style"), r = d.querySelector(".remark-slide-scaler");
+  if (!r) return;
+  s.type = "text/css"; s.innerHTML = "@page {size: " + r.style.width + " " + r.style.height +"; }";
+  d.head.appendChild(s);
+})(document);
+
+(function(d) {
+  var el = d.getElementsByClassName("remark-slides-area");
+  if (!el) return;
+  var slide, slides = slideshow.getSlides(), els = el[0].children;
+  for (var i = 1; i < slides.length; i++) {
+    slide = slides[i];
+    if (slide.properties.continued === "true" || slide.properties.count === "false") {
+      els[i - 1].className += ' has-continuation';
+    }
+  }
+  var s = d.createElement("style");
+  s.type = "text/css"; s.innerHTML = "@media print { .has-continuation { display: none; } }";
+  d.head.appendChild(s);
+})(document);
+// delete the temporary CSS (for displaying all slides initially) when the user
+// starts to view slides
+(function() {
+  var deleted = false;
+  slideshow.on('beforeShowSlide', function(slide) {
+    if (deleted) return;
+    var sheets = document.styleSheets, node;
+    for (var i = 0; i < sheets.length; i++) {
+      node = sheets[i].ownerNode;
+      if (node.dataset["target"] !== "print-only") continue;
+      node.parentNode.removeChild(node);
+    }
+    deleted = true;
+  });
+})();
+(function() {
+  "use strict"
+  // Replace <script> tags in slides area to make them executable
+  var scripts = document.querySelectorAll(
+    '.remark-slides-area .remark-slide-container script'
+  );
+  if (!scripts.length) return;
+  for (var i = 0; i < scripts.length; i++) {
+    var s = document.createElement('script');
+    var code = document.createTextNode(scripts[i].textContent);
+    s.appendChild(code);
+    var scriptAttrs = scripts[i].attributes;
+    for (var j = 0; j < scriptAttrs.length; j++) {
+      s.setAttribute(scriptAttrs[j].name, scriptAttrs[j].value);
+    }
+    scripts[i].parentElement.replaceChild(s, scripts[i]);
+  }
+})();
+(function() {
+  var links = document.getElementsByTagName('a');
+  for (var i = 0; i < links.length; i++) {
+    if (/^(https?:)?\/\//.test(links[i].getAttribute('href'))) {
+      links[i].target = '_blank';
+    }
+  }
+})();
+// adds .remark-code-has-line-highlighted class to <pre> parent elements
+// of code chunks containing highlighted lines with class .remark-code-line-highlighted
+(function(d) {
+  const hlines = d.querySelectorAll('.remark-code-line-highlighted');
+  const preParents = [];
+  const findPreParent = function(line, p = 0) {
+    if (p > 1) return null; // traverse up no further than grandparent
+    const el = line.parentElement;
+    return el.tagName === "PRE" ? el : findPreParent(el, ++p);
+  };
+
+  for (let line of hlines) {
+    let pre = findPreParent(line);
+    if (pre && !preParents.includes(pre)) preParents.push(pre);
+  }
+  preParents.forEach(p => p.classList.add("remark-code-has-line-highlighted"));
+})(document);</script>
+
+<script>
+slideshow._releaseMath = function(el) {
+  var i, text, code, codes = el.getElementsByTagName('code');
+  for (i = 0; i < codes.length;) {
+    code = codes[i];
+    if (code.parentNode.tagName !== 'PRE' && code.childElementCount === 0) {
+      text = code.textContent;
+      if (/^\\\((.|\s)+\\\)$/.test(text) || /^\\\[(.|\s)+\\\]$/.test(text) ||
+          /^\$\$(.|\s)+\$\$$/.test(text) ||
+          /^\\begin\{([^}]+)\}(.|\s)+\\end\{[^}]+\}$/.test(text)) {
+        code.outerHTML = code.innerHTML;  // remove <code></code>
+        continue;
+      }
+    }
+    i++;
+  }
+};
+slideshow._releaseMath(document);
+</script>
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+(function () {
+  var script = document.createElement('script');
+  script.type = 'text/javascript';
+  script.src  = 'https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-MML-AM_CHTML';
+  if (location.protocol !== 'file:' && /^https?:/.test(script.src))
+    script.src  = script.src.replace(/^https?:/, '');
+  document.getElementsByTagName('head')[0].appendChild(script);
+})();
+</script>
+  </body>
+</html>

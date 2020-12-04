@@ -1,0 +1,411 @@
+---
+title: Downloading Twitter Data 
+subtitle: Day 4
+author: "Olga Chyzh [www.olgachyzh.com]"
+output:
+  xaringan::moon_reader:
+    lib_dir: libs
+    nature:
+      highlightStyle: github
+      highlightLines: true
+      countIncrementalSlides: false
+exclude: true
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r  setup, message=FALSE, warning=FALSE, include=FALSE}
+options(
+  htmltools.dir.version = FALSE, # for blogdown
+  width = 80,
+  tibble.width = 80
+)
+
+knitr::opts_chunk$set(
+  fig.align = "center",  warning=FALSE, message=FALSE
+)
+
+```
+
+
+
+## Outline
+
+    
+- Make a Twitter App
+
+- Use `rtweet` to download Twitter data
+
+Download all materials from [Github](https://github.com/ochyzh/Websraping-Workshop)
+
+Workshop 1 video posted [here](https://play.library.utoronto.ca/0de7f9b4b6295aafbee68a61e198c845)
+
+Workshop 2 video posted [here](https://play.library.utoronto.ca/cc3ebb18816bfdcf8be7686bf060385b)
+
+Workshop 3 video posted [here](https://play.library.utoronto.ca/5646bdd009c7b8f905855e8e8b272e49)
+
+
+---
+## Required Packages
+
+Install all tidyverse packages:
+```{r gettv, echo = T, eval = T}
+# check if you already have it
+library(tidyverse)
+library(magrittr)
+library(rtweet)
+library(lubridate)
+library(ggplot2)
+library(stringr)
+library(igraph)
+
+# if not:
+#install.packages("rtweet")
+#library(rtweet) # only calls the "core" of tidyverse
+
+#Or install the development version:
+#devtools::install_github("mkearney/rtweet")
+
+
+```
+
+
+---
+
+## Some Background
+
+- Many websites use APIs (application protocol interfaces) to manage and organize their data.
+
+- These are often public (or allow authorized users), so we can use them to obtain data.
+
+- Twitter, Facebook, Reddit, the World Bank website, the US Census Website
+
+- App-specific R packages to make it easy: `rtweet`, `Rfacebook` `RedditExtractoR` 
+
+---
+## Twitter APIs
+
+- Connecting to Twitter's API requires access tokens: **api key**, **api secret key**, **access token**, **access token secret**
+
+- Need a Twitter Developer Account
+
+- If don't have one, follow the instructions outlined here:
+
+```{r, eval=F}
+vignette("auth", package = "rtweet")
+```
+
+- Once you have an account, log in, make an app, give it a name, and copy the following four elements: `api_key`, `api_secret_key`, `access_token`, `access_token_secret`
+
+---
+
+#These Are MINE, Get Your Own!
+```{r, eval=F}
+api_key <- "abXXRlapnqfhMDhA3n1t00GXaxx"
+api_secret_key <- "eyh24B5i8ETIxTGopOL0mQoFnirLnotVEdWeUVTI0eVrXmKwAYxx"
+access_token <- "4882273461-PLspkkkZEndhlaJ00uXpQ36KQCK3RefzU61fQACxx"
+access_token_secret<-"2ZXjFiwVNEjKPFnWFFxoI3n0Ar0O5Zlio3MyoE1Uc4M4dxx"
+
+
+## authenticate via web browser
+token <- create_token(
+  app = "Olgas_scraper",
+  consumer_key = api_key,
+  consumer_secret = api_secret_key,
+  access_token = access_token,
+  access_secret = access_token_secret,
+  set_renv = TRUE)
+```
+
+---
+
+## Friends/Followers
+
+- Twitter [API documentation](https://developer.twitter.com/en/docs/twitter-api/v1/data-dictionary/overview/user-object) distinguishes between *friends* and *followers*
+
+    - *friend* an account a user follows: a limit of 5000
+    
+    - *follower* account that follows a user: no limit
+    
+
+```{r, eval=F}
+friends<-get_friends("olga_chyzh", parse=TRUE)
+friends
+
+followers<-get_followers("olga_chyzh")
+followers
+
+#for accounts with large followings:
+flwrs<-get_followers("NateSilver538",n=10000, retryonratelimit = TRUE)
+```
+    
+---
+
+## Tell Me Who Your Friends Are
+
+```{r, eval=F}
+olgas_followers<-lookup_users(followers$user_id)
+olgas_followers<-select(olgas_followers, user_id, screen_name, description)
+```
+
+- Do my friends know each other? 
+
+```{r, eval=F}
+lookup_friendships("Pearson_ink","BlaxlandJoel")
+```
+---
+## Make a Network of My First 100 Friends
+
+```{r, eval=F}
+
+olgas_followers<-olgas_followers[1:100,]
+
+#Match each friend with each other friend
+friends_net<-expand.grid(screen_name1=olgas_followers$screen_name,screen_name2=olgas_followers$screen_name)
+
+#Add ids and descriptions
+friends_net<-friends_net %>% 
+  left_join(olgas_followers, by=c("screen_name1"="screen_name")) %>% 
+  select(user_id1=user_id, desc1=description, everything()) %>% 
+  left_join(olgas_followers, by=c("screen_name2"="screen_name")) %>%
+  select(user_id1, user_id2=user_id, screen_name1 , screen_name2, desc2=description, everything()) 
+
+
+```
+
+---
+
+## Write a Loop to Get Links  
+```{r, eval=F}
+
+link<-NULL
+for (i in 1:nrow(friends_net)) {
+     tryCatch({
+  scrnm1<-friends_net[i,3]
+  scrnm2<-friends_net[i,4]
+  if (scrnm1!=scrnm2){
+  fr1<-lookup_friendships(scrnm1,scrnm2)
+  link[i]<-ifelse(fr1$value[4]=="TRUE",1,0) #If friend 1 follows friend 2
+    } else {link[i]<-NA}
+   }, error = function(e) {
+      cat("rate limit reached on user: ", i, ", user skipped", fill=TRUE)
+     Sys.sleep(901)
+     
+    }
+  )
+} 
+
+friends_net$link<-NA
+friends_net$link<-link
+saveRDS(friends_net,"friends_net.rds")
+```
+
+---
+
+## Rate Limits
+
+- Twitter limits how much data you can download at once.
+
+- Use `rate_limit` to find out what the limits are.
+
+```{r, eval=F}
+rate_limit(token = NULL, query = "lookup_friendships", parse = TRUE)
+```
+
+- Use `Sys.sleep()` to have your loop/program pause once it reaches the rate limit, wait it out and restart.
+
+---
+## A Network of My Friends
+
+```{r, eval=TRUE, out.width= "400px"}
+friends_net<-readRDS("friends_net.rds")
+elist<-friends_net %>% filter(link==1) %>% select(screen_name1,screen_name2)
+p<-graph_from_edgelist(as.matrix(elist))
+plot(p, vertex.color="turquoise", vertex.size=10, vertex.label=NA)
+```
+
+---
+
+## Why Do My Friends Know Each Other?
+```{r, eval=T}
+olgas_followers<-readRDS("olgas_followers.rds")
+olgas_followers <-olgas_followers %>% mutate(description=str_to_lower(description),
+                           academ=as.numeric(str_detect(description, "professor")==TRUE |
+                                                          str_detect(description, "scientist")==TRUE|
+                                                           str_detect(description, "polsci")==TRUE |
+                                                           str_detect(description, "polisci")==TRUE |
+                                                           str_detect(description, "phd")==TRUE |
+                                                           str_detect(description, "political")==TRUE
+                                                           ))
+
+```
+---
+
+## A Network of My Friends
+
+```{r, eval=F}
+mynodes<-as.data.frame(get.vertex.attribute(p)$name)  #get node names in order
+names(mynodes)<-"screen_name" 
+mynodes %>% left_join(olgas_followers, by="screen_name") %>% mutate(academ=replace_na(academ,0)) -> mynodes #merge in academ
+p<-set_vertex_attr(p, "academ", value=mynodes$academ) #set academ as a vertex attribute
+V(p)[V(p)$academ == 1]$color <- "purple"
+V(p)[V(p)$academ == 0]$color <- "turquoise"
+plot(p,  vertex.size=10,  vertex.label=NA, layout=layout.circle)
+
+```
+---
+## A Network of My Friends
+
+```{r, echo=F}
+mynodes<-as.data.frame(get.vertex.attribute(p)$name)  #get node names in order
+names(mynodes)<-"screen_name" 
+mynodes %>% left_join(olgas_followers, by="screen_name") %>% mutate(academ=replace_na(academ,0)) -> mynodes #merge in academ
+p<-set_vertex_attr(p, "academ", value=mynodes$academ) #set academ as a vertex attribute
+V(p)[V(p)$academ == 1]$color <- "purple"
+V(p)[V(p)$academ == 0]$color <- "turquoise"
+plot(p,  vertex.size=10,  vertex.label=NA, layout=layout.circle)
+
+```
+
+---
+
+## Who Are My Non-Academic Friends?
+
+```{r, out.width= "400px"}
+mynodes1<- mynodes %>% filter(academ==0) 
+elist1<-friends_net %>% filter((screen_name1 %in% mynodes1$screen_name) & (screen_name2 %in% mynodes1$screen_name) & link==1) %>% select(screen_name1,screen_name2)
+p<-graph_from_edgelist(as.matrix(elist1))
+plot(p,  vertex.size=10, vertex.color="turquoise", vertex.label.dist=2)
+```
+
+
+---
+## User Timelines
+
+Specify a user ID or screen name and the number of tweets (max of 3200)
+
+```{r, eval=F}
+olgas_tl<-get_timeline("olga_chyzh",n=3200) 
+olgas_tl<-olgas_tl %>% 
+  mutate(t=ymd_hms(created_at, tz="GMT") , t_ET=with_tz(t,"America/New_York"), hr=hour(t_ET), min=minute(t_ET), time=round((hr*60+min)/5)*5) %>% 
+  group_by(time) %>%
+  summarise(freq=length(time), .groups="keep") 
+
+olgas_tl %>%  ggplot(aes(x=time,y=freq))+geom_line()+ geom_point()+ scale_x_continuous("",breaks=seq(from=0, to=1380, by=60),labels=seq(from=0,to=23, by=1)) + scale_y_continuous("")+coord_polar() +theme_bw()
+table(olgas_tl$freq)
+```
+---
+
+## When Do I Tweet? When Do I Sleep?
+
+```{r, echo=F}
+olgas_tl<-readRDS("olgas_tl.rds")
+olgas_tl<-olgas_tl %>% 
+  mutate(t=ymd_hms(created_at, tz="GMT") , t_ET=with_tz(t,"America/New_York"), hr=hour(t_ET), min=minute(t_ET), time=round((hr*60+min)/5)*5) %>% 
+  group_by(time) %>%
+  summarise(freq=length(time), .groups="keep") 
+
+olgas_tl %>%  ggplot(aes(x=time,y=freq))+geom_line()+ geom_point()+ scale_x_continuous("",breaks=seq(from=0, to=1380, by=60),labels=seq(from=0,to=23, by=1)) + scale_y_continuous("")+coord_polar() +theme_bw()
+
+```
+
+
+---
+
+## A Timeline of a Bot
+
+```{r, eval=F}
+bot_tl<-get_timeline("American__Voter",n=3200) 
+bot_tl<-bot_tl %>% 
+  mutate(t=ymd_hms(created_at, tz="GMT") , t_ET=with_tz(t,"America/New_York"), hr=hour(t_ET), min=minute(t_ET), time=round((hr*60+min)/5)*5) %>% 
+  group_by(time) %>%
+  summarise(freq=length(time), .groups="keep") 
+
+bot_tl %>%  ggplot(aes(x=time,y=freq))+geom_line()+ geom_point()+ scale_x_continuous("",limits=c(0, 1440),breaks=seq(from=0, to=1380, by=60),labels=seq(from=0,to=23, by=1)) + scale_y_continuous("")+coord_polar() +theme_bw()
+
+table(bot_tl$freq)
+
+```
+---
+
+## Does American__Voter Sleep?
+
+```{r, echo=F}
+bot_tl<-readRDS("bot_tl.rds")
+bot_tl<-bot_tl %>% 
+  mutate(t=ymd_hms(created_at, tz="GMT") , t_ET=with_tz(t,"America/New_York"), hr=hour(t_ET), min=minute(t_ET), time=round((hr*60+min)/5)*5) %>% 
+  group_by(time) %>%
+  summarise(freq=length(time), .groups="keep") 
+
+bot_tl %>%  ggplot(aes(x=time,y=freq))+geom_line()+ geom_point()+ scale_x_continuous("",limits=c(0, 1440),breaks=seq(from=0, to=1380, by=60),labels=seq(from=0,to=23, by=1)) + scale_y_continuous("")+coord_polar() +theme_bw()
+
+```
+
+
+---
+
+## Tell Me Who Your Friends Are
+
+```{r, eval=F}
+library(parallel)
+tl_scraper<-function(scrnm){
+  tryCatch({
+  d<-get_timeline(scrnm,n=1000)
+    }, error = function(e) {
+      cat(" problem user: ", scrnm, ", user skipped", fill=T)
+      })
+}
+
+fol_list<-c("andrewheiss","burrelvannjr","CarrieAKJohnson","decustecu","HawkInATX","kristinerudolph","MortazaAbbasi", "shifrinson")
+olgas_fol_tl<-do.call(rbind,mclapply(fol_list,tl_scraper))
+saveRDS(olgas_fol_tl, "olgas_fol_tl.rds")
+```
+
+---
+## Tell Me Who Your Friends Are
+```{r, eval=F}
+olgas_fol_tl %>% 
+  mutate(t=ymd_hms(created_at, tz="GMT") , t_ET=with_tz(t,"America/New_York"), hr=hour(t_ET), min=minute(t_ET), time=round((hr*60+min)/10)*10) %>% 
+  group_by(time, screen_name) %>%
+  summarise(freq=length(time), .groups="keep") %>%  ggplot(aes(x=time,y=freq))+
+  geom_line()+ 
+  geom_point() + 
+  facet_wrap(~screen_name)+ 
+  scale_x_continuous("",limits=c(0, 1440),breaks=seq(from=0, to=1380, by=60),labels=seq(from=0,to=23, by=1))+
+  scale_y_continuous("")+
+  coord_polar() +
+  theme_bw()
+
+```
+---
+
+## Tell Me Who Your Friends Are
+```{r, echo=F, out.width= "400px"}
+olgas_fol_tl<-readRDS("olgas_fol_tl3.rds")
+olgas_fol_tl %>% 
+  mutate(t=ymd_hms(created_at, tz="GMT") , t_ET=with_tz(t,"America/New_York"), hr=hour(t_ET), min=minute(t_ET), time=round((hr*60+min)/10)*10) %>% 
+  group_by(time, screen_name) %>%
+  summarise(freq=length(time), .groups="keep") %>%  ggplot(aes(x=time,y=freq))+
+  geom_line()+ 
+  geom_point() + 
+  facet_wrap(~screen_name)+ 
+  scale_x_continuous("",limits=c(0, 1440),breaks=seq(from=0, to=1380, by=60),labels=seq(from=0,to=23, by=1))+
+  scale_y_continuous("")+
+  coord_polar() +
+  theme_bw()
+```
+
+---
+## Likes
+
+```{r, eval=F}
+olgas_favs <- get_favorites("olga_chyzh", n = 3000) #max is 3000
+ts_plot(olgas_favs, "10 days")+theme_bw()
+```
+
+```{r, eval=T, echo=F, out.width= "400px"}
+olgas_favs <- readRDS("olgas_favs.rds")
+ts_plot(olgas_favs, "10 days")+theme_bw()
+```
+
+
