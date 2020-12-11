@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="" xml:lang="">
+  <head>
+    <title>Downloading Twitter Data</title>
+    <meta charset="utf-8" />
+    <meta name="author" content="Olga Chyzh [www.olgachyzh.com]" />
+    <link href="libs/remark-css/default.css" rel="stylesheet" />
+    <link href="libs/remark-css/default-fonts.css" rel="stylesheet" />
+  </head>
+  <body>
+    <textarea id="source">
+class: center, middle, inverse, title-slide
+
+# Downloading Twitter Data
+## Day 4
+### Olga Chyzh [www.olgachyzh.com]
+
+---
+
+
+
+
+## Materials
+
+Download all materials from [Github](https://github.com/ochyzh/Websraping-Workshop)
+
+Workshop 1 video posted [here](https://play.library.utoronto.ca/0de7f9b4b6295aafbee68a61e198c845)
+
+Workshop 2 video posted [here](https://play.library.utoronto.ca/cc3ebb18816bfdcf8be7686bf060385b)
+
+Workshop 3 video posted [here](https://play.library.utoronto.ca/5646bdd009c7b8f905855e8e8b272e49)
+
+Workshop 4 video posted [here](https://play.library.utoronto.ca/3164d61a493bb8c44901d40aff512a3e)
+
+---
+
+## Outline
+
+- Good data management from start to finish of the project
+
+- Object classes: `numeric`/`integer`, `character`, `date`/`time`, `factor`.
+
+- Most frequently used tools: `select`, `arrange`, `filter`, `mutate`, `summarise`, `join_by`
+
+- Example: [Global Terrorism Dataset](https://www.start.umd.edu/gtd/access/). 
+
+---
+
+## Good Data Management Principles
+
+- *Never* alter the raw data in any way. No sorting, fixing typos&lt;sup&gt;1&lt;/sup&gt; 
+
+    - Save all raw data files in a subfolder named `raw` and all the transformed data files in a subfolder named `data`.
+    
+- Save all data management in a script, so you can check/edit it as needed.
+
+- A readable script is a short script
+
+    - Use the pipe operators to chain functions
+    
+    - Loop as much as possible
+
+- Have separate scripts for data cleaning and analysis.  
+
+- Can you think of other principles?
+
+.footnote[
+&lt;sup&gt;1&lt;/sup&gt; I do manually change Excel files to .csv format though.] 
+
+---
+
+## Required Packages
+
+Install all tidyverse packages:
+
+```r
+library(tidyverse)
+library(magrittr)
+library(lubridate)
+library(ggplot2)
+library(stringr)
+library(data.table)
+library(openxlsx)
+```
+
+---
+
+## Get the Data
+
+Download the full [Global Terrorism Dataset](https://www.start.umd.edu/gtd/access/) (need to provide very basic info, like your name) or a smaller version of incidents since 2010 [here](https://raw.githubusercontent.com/ochyzh/Websraping-Workshop/master/GTD_small.csv)
+
+The full version is over 160 MB once converted to .csv. Opening it using `read.csv` will take a while. Try `data.table::fread` to read it faster:
+
+
+```r
+fulldata&lt;-fread("./raw/globalterrorismdb_0919dist.csv", header=TRUE) 
+smalldata&lt;-fread("https://raw.githubusercontent.com/ochyzh/Websraping-Workshop/master/GTD_small.csv", header=TRUE)
+```
+
+
+---
+
+## `select`, `filter` and `arrange`
+
+- `dplyr::select` allows you to select specific columns of the data
+
+     - E. g., use `select` to reduce the number of variables in the data
+
+
+```r
+fulldata&lt;- select(fulldata, iyear, imonth, iday, country_txt, attacktype1_txt, latitude, longitude)
+smalldata &lt;-select(smalldata, iyear, imonth, iday, country_txt, attacktype1_txt, latitude, longitude)
+```
+
+- `dplyr::filter` allows you to select by rows
+
+
+```r
+filter(fulldata, iyear==2018)
+filter(smalldata, iyear==2018)
+```
+
+- `dplyr::arrange` allows you to sort the data
+
+
+```r
+fulldata&lt;-arrange(fulldata, iyear, imonth, iday)
+smalldata&lt;-arrange(smalldata, iyear, imonth, iday)
+```
+
+
+---
+
+## Check How Variables Are Stored
+
+`str` is for structure
+
+
+```r
+str(fulldata)
+```
+
+    - `int` is for integer
+
+    - `chr` is for character
+
+    - `num` is for numeric
+
+- Fix any class inconsistencies, e. g. numbers stored as characters or factors
+
+---
+
+## Example: Convert Year/Month/Day to Date Class
+
+To convert to `date` using `lubridate`, need:
+
+`\(\color{green}\checkmark\)` Year in the form XXXX 
+
+`\(\color{red}\times\)` Month in the form XX  
+
+`\(\color{red}\times\)` Day in the form XX 
+
+`\(\color{red}\times\)` Some months and days are coded as 0
+
+`\(\color{red}\times\)` Date saved in the format that combines year, month, and day, e.g., YYYY-MM-DD 
+
+---
+## Plan of Attack
+
+[1.] Use `filter` to drop the observations with unknown day or month (can you think of other ways to treat these?)
+
+
+```r
+fulldata&lt;- filter(fulldata, imonth!=0, iday !=0)
+```
+
+[2.] Pad month and day with leading zeroes, using `str_pad` from the `stringr` package
+
+
+```r
+fulldata$month&lt;-str_pad(fulldata$imonth,2,pad="0")
+fulldata$day&lt;-str_pad(fulldata$iday,2,pad="0")
+```
+
+[3.] Use `paste0` to combine year, month, and date
+
+
+```r
+fulldata$date&lt;-paste0(fulldata$iyear,fulldata$month,fulldata$day)
+```
+
+[4.] Convert variable `date` to class "date"
+
+
+```r
+fulldata$date&lt;-ymd(fulldata$date)
+```
+
+---
+
+## `dplyr::mutate`
+
+- In the previous couple slides, we recoded variables in our data using `base` R.
+
+- `mutate` is a function to recode within the `dplyr` package.
+
+- Does the same thing, but works well with other `dplyr` functions when chained into a pipe
+
+- Makes for shorter/clearer code chunks
+
+
+```r
+fulldata&lt;-fulldata %&gt;% 
+  filter(imonth!=0, iday !=0) %&gt;%
+  mutate(month=str_pad(imonth,2,pad="0"), 
+         day=str_pad(iday,2,pad="0"),
+         date&lt;-paste0(iyear,month,day),
+         date&lt;-ymd(date))
+
+smalldata&lt;-smalldata %&gt;% 
+  filter(imonth!=0, iday !=0) %&gt;%
+  mutate(month=str_pad(imonth,2,pad="0"), 
+         day=str_pad(iday,2,pad="0"),
+         date&lt;-paste0(iyear,month,day),
+         date&lt;-ymd(date))
+```
+---
+## Joining Multiple Datasets
+
+We often want to add additional variables into our data.
+
+For example, if we wanted to make a choropleth map of the world that colors countries based on the number of terrorist attacks in 2018, we would need to merge our data with a the data on geographical borders.
+
+Library `mapdata` contains data on geographical borders that would allow us to make a map.
+
+
+```r
+library(mapdata)
+world&lt;-map_data("world")
+head(world)
+```
+
+```
+##        long      lat group order region subregion
+## 1 -69.89912 12.45200     1     1  Aruba      &lt;NA&gt;
+## 2 -69.89571 12.42300     1     2  Aruba      &lt;NA&gt;
+## 3 -69.94219 12.43853     1     3  Aruba      &lt;NA&gt;
+## 4 -70.00415 12.50049     1     4  Aruba      &lt;NA&gt;
+## 5 -70.06612 12.54697     1     5  Aruba      &lt;NA&gt;
+## 6 -70.05088 12.59707     1     6  Aruba      &lt;NA&gt;
+```
+
+
+---
+## Make the Map of the World
+
+
+```r
+ggplot(data=filter(world, region!="Antarctica"), aes(x=long, y=lat, group=group))+geom_polygon(color="black", fill="white") +
+  scale_y_continuous("")
+```
+
+&lt;img src="Slides_Day5_files/figure-html/unnamed-chunk-12-1.png" style="display: block; margin: auto;" /&gt;
+
+---
+
+## Joining Two Datasets
+
+- In order to join two datasets, we must identify the common variable, i.e. the "joining" variable.
+
+
+```r
+head(smalldata)
+```
+
+```
+##    iyear imonth iday country_txt   attacktype1_txt latitude longitude month day
+## 1:  2018      1    1        Iraq Bombing/Explosion 36.37682  42.44888    01  01
+## 2:  2018      1    1        Iraq Bombing/Explosion 35.45211  44.37546    01  01
+## 3:  2018      1    1    Pakistan Bombing/Explosion 30.92211  66.45153    01  01
+## 4:  2018      1    1    Pakistan Bombing/Explosion 30.92211  66.45153    01  01
+## 5:  2018      1    1     Nigeria Bombing/Explosion 10.88942  13.62832    01  01
+## 6:  2018      1    1 Afghanistan     Assassination 32.48035  62.02891    01  01
+##    date &lt;- paste0(iyear, month, day) date &lt;- ymd(date)
+## 1:                          20180101        2018-01-01
+## 2:                          20180101        2018-01-01
+## 3:                          20180101        2018-01-01
+## 4:                          20180101        2018-01-01
+## 5:                          20180101        2018-01-01
+## 6:                          20180101        2018-01-01
+```
+
+```r
+head(world)
+```
+
+```
+##        long      lat group order region subregion
+## 1 -69.89912 12.45200     1     1  Aruba      &lt;NA&gt;
+## 2 -69.89571 12.42300     1     2  Aruba      &lt;NA&gt;
+## 3 -69.94219 12.43853     1     3  Aruba      &lt;NA&gt;
+## 4 -70.00415 12.50049     1     4  Aruba      &lt;NA&gt;
+## 5 -70.06612 12.54697     1     5  Aruba      &lt;NA&gt;
+## 6 -70.05088 12.59707     1     6  Aruba      &lt;NA&gt;
+```
+
+- Variable `country_txt` identifies observations in teh `smalldata` dataset, while the same information in the `world` dataset is contained in the variable `region`.
+
+- The joining variable must be formatted the same way in both datasets, e.g., capitalization, accents, apostrophes, spelling.
+
+---
+## Prepare the Terrorism Data
+
+- The unit of observation is attack, but we want to shade countries proportional to the number of attacks.
+
+- We need to change the level of aggregation from *attack* to *country*.
+
+- We can use `summarise` with *country* as the grouping variable
+
+
+```r
+smalldata&lt;- smalldata %&gt;% 
+  group_by(country_txt) %&gt;%
+  summarise(num_attks=length(country_txt), .groups="keep") %&gt;%
+  arrange(desc(num_attks))
+```
+
+
+---
+
+## Check Before Joining
+
+- Before we join these two datasets, we will do a check using `anti_join`.
+
+- `anti_join` will show us all the countries that are not matching up.
+
+
+```r
+nomatch1&lt;- smalldata %&gt;% anti_join(world, by=c("country_txt"="region"))
+unique(nomatch1$country_txt)
+```
+
+```
+## [1] "West Bank and Gaza Strip" "United Kingdom"          
+## [3] "United States"            "Bosnia-Herzegovina"      
+## [5] "Slovak Republic"          "Trinidad and Tobago"
+```
+
+```r
+nomatch2&lt;- world %&gt;% anti_join(smalldata, by=c("region"="country_txt"))
+unique(nomatch2$region)
+```
+
+```
+##   [1] "Aruba"                              
+##   [2] "Angola"                             
+##   [3] "Anguilla"                           
+##   [4] "Albania"                            
+##   [5] "Andorra"                            
+##   [6] "United Arab Emirates"               
+##   [7] "American Samoa"                     
+##   [8] "Antarctica"                         
+##   [9] "French Southern and Antarctic Lands"
+##  [10] "Antigua"                            
+##  [11] "Barbuda"                            
+##  [12] "Benin"                              
+##  [13] "Bahamas"                            
+##  [14] "Bosnia and Herzegovina"             
+##  [15] "Saint Barthelemy"                   
+##  [16] "Belarus"                            
+##  [17] "Belize"                             
+##  [18] "Bermuda"                            
+##  [19] "Barbados"                           
+##  [20] "Brunei"                             
+##  [21] "Bhutan"                             
+##  [22] "Botswana"                           
+##  [23] "Republic of Congo"                  
+##  [24] "Cook Islands"                       
+##  [25] "Cape Verde"                         
+##  [26] "Costa Rica"                         
+##  [27] "Cuba"                               
+##  [28] "Curacao"                            
+##  [29] "Cayman Islands"                     
+##  [30] "Cyprus"                             
+##  [31] "Czech Republic"                     
+##  [32] "Djibouti"                           
+##  [33] "Dominica"                           
+##  [34] "Dominican Republic"                 
+##  [35] "Eritrea"                            
+##  [36] "Canary Islands"                     
+##  [37] "Estonia"                            
+##  [38] "Fiji"                               
+##  [39] "Falkland Islands"                   
+##  [40] "Reunion"                            
+##  [41] "Mayotte"                            
+##  [42] "French Guiana"                      
+##  [43] "Martinique"                         
+##  [44] "Guadeloupe"                         
+##  [45] "Faroe Islands"                      
+##  [46] "Micronesia"                         
+##  [47] "Gabon"                              
+##  [48] "UK"                                 
+##  [49] "Guernsey"                           
+##  [50] "Gambia"                             
+##  [51] "Guinea-Bissau"                      
+##  [52] "Equatorial Guinea"                  
+##  [53] "Grenada"                            
+##  [54] "Greenland"                          
+##  [55] "Guam"                               
+##  [56] "Guyana"                             
+##  [57] "Heard Island"                       
+##  [58] "Honduras"                           
+##  [59] "Croatia"                            
+##  [60] "Hungary"                            
+##  [61] "Isle of Man"                        
+##  [62] "Cocos Islands"                      
+##  [63] "Christmas Island"                   
+##  [64] "Chagos Archipelago"                 
+##  [65] "Iceland"                            
+##  [66] "San Marino"                         
+##  [67] "Jamaica"                            
+##  [68] "Jersey"                             
+##  [69] "Siachen Glacier"                    
+##  [70] "Kazakhstan"                         
+##  [71] "Kiribati"                           
+##  [72] "Nevis"                              
+##  [73] "Saint Kitts"                        
+##  [74] "Kuwait"                             
+##  [75] "Laos"                               
+##  [76] "Liberia"                            
+##  [77] "Saint Lucia"                        
+##  [78] "Liechtenstein"                      
+##  [79] "Lesotho"                            
+##  [80] "Luxembourg"                         
+##  [81] "Latvia"                             
+##  [82] "Saint Martin"                       
+##  [83] "Monaco"                             
+##  [84] "Moldova"                            
+##  [85] "Madagascar"                         
+##  [86] "Marshall Islands"                   
+##  [87] "Macedonia"                          
+##  [88] "Malta"                              
+##  [89] "Mongolia"                           
+##  [90] "Northern Mariana Islands"           
+##  [91] "Montserrat"                         
+##  [92] "Mauritius"                          
+##  [93] "Namibia"                            
+##  [94] "Norfolk Island"                     
+##  [95] "Niue"                               
+##  [96] "Bonaire"                            
+##  [97] "Sint Eustatius"                     
+##  [98] "Saba"                               
+##  [99] "Norway"                             
+## [100] "Nauru"                              
+## [101] "New Zealand"                        
+## [102] "Oman"                               
+## [103] "Panama"                             
+## [104] "Pitcairn Islands"                   
+## [105] "Palau"                              
+## [106] "Papua New Guinea"                   
+## [107] "Puerto Rico"                        
+## [108] "North Korea"                        
+## [109] "Madeira Islands"                    
+## [110] "Azores"                             
+## [111] "Portugal"                           
+## [112] "Palestine"                          
+## [113] "French Polynesia"                   
+## [114] "Qatar"                              
+## [115] "Romania"                            
+## [116] "Singapore"                          
+## [117] "South Sandwich Islands"             
+## [118] "South Georgia"                      
+## [119] "Saint Helena"                       
+## [120] "Ascension Island"                   
+## [121] "Solomon Islands"                    
+## [122] "Sierra Leone"                       
+## [123] "El Salvador"                        
+## [124] "Saint Pierre and Miquelon"          
+## [125] "Sao Tome and Principe"              
+## [126] "Suriname"                           
+## [127] "Slovakia"                           
+## [128] "Slovenia"                           
+## [129] "Swaziland"                          
+## [130] "Sint Maarten"                       
+## [131] "Seychelles"                         
+## [132] "Turks and Caicos Islands"           
+## [133] "Togo"                               
+## [134] "Turkmenistan"                       
+## [135] "Timor-Leste"                        
+## [136] "Tonga"                              
+## [137] "Trinidad"                           
+## [138] "Tobago"                             
+## [139] "Uruguay"                            
+## [140] "USA"                                
+## [141] "Uzbekistan"                         
+## [142] "Vatican"                            
+## [143] "Grenadines"                         
+## [144] "Saint Vincent"                      
+## [145] "Virgin Islands"                     
+## [146] "Vanuatu"                            
+## [147] "Wallis and Futuna"                  
+## [148] "Samoa"                              
+## [149] "Zambia"
+```
+
+
+---
+
+## Fix Spelling of Country Names
+
+
+```r
+smalldata&lt;-smalldata %&gt;% mutate(region=country_txt, region=str_replace(region,"United States","USA"),
+                     region=str_replace(region,"United Kingdom","UK"),
+                     region=str_replace(region,"Bosnia-Herzegovina","Bosnia and Herzegovina"),
+                     region=str_replace(region,"West Bank and Gaza Strip","Palestine"),
+                     region=str_replace(region,"Slovak Republic","Slovakia"),
+                     region=str_replace(region,"Trinidad and Tobago","Trinidad"),
+                     region=str_squish(region)
+                     )
+```
+---
+
+## Merge
+
+
+```r
+world %&gt;% filter(region!="Antarctica") %&gt;% left_join(smalldata, by="region") %&gt;%
+  ggplot(aes(x=long, y=lat, group=group, fill=log(num_attks)))+geom_polygon(color="black") +
+  scale_y_continuous("", breaks=NULL)+scale_x_continuous("", breaks=NULL)+ scale_fill_gradient2("Attks",na.value="white")+theme_bw()
+```
+
+&lt;img src="Slides_Day5_files/figure-html/unnamed-chunk-17-1.png" style="display: block; margin: auto;" /&gt;
+
+
+
+---
+## More resources:
+
+    - [Karl Browman's blog](https://kbroman.org/dataorg/)
+    
+    - [Hadley Wickam's website](http://hadley.nz/)
+    
+    - [Heike Hoffman's class website](https://stat579-at-isu.github.io/)
+    </textarea>
+<style data-target="print-only">@media screen {.remark-slide-container{display:block;}.remark-slide-scaler{box-shadow:none;}}</style>
+<script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+<script>var slideshow = remark.create({
+"highlightStyle": "github",
+"highlightLines": true,
+"countIncrementalSlides": false
+});
+if (window.HTMLWidgets) slideshow.on('afterShowSlide', function (slide) {
+  window.dispatchEvent(new Event('resize'));
+});
+(function(d) {
+  var s = d.createElement("style"), r = d.querySelector(".remark-slide-scaler");
+  if (!r) return;
+  s.type = "text/css"; s.innerHTML = "@page {size: " + r.style.width + " " + r.style.height +"; }";
+  d.head.appendChild(s);
+})(document);
+
+(function(d) {
+  var el = d.getElementsByClassName("remark-slides-area");
+  if (!el) return;
+  var slide, slides = slideshow.getSlides(), els = el[0].children;
+  for (var i = 1; i < slides.length; i++) {
+    slide = slides[i];
+    if (slide.properties.continued === "true" || slide.properties.count === "false") {
+      els[i - 1].className += ' has-continuation';
+    }
+  }
+  var s = d.createElement("style");
+  s.type = "text/css"; s.innerHTML = "@media print { .has-continuation { display: none; } }";
+  d.head.appendChild(s);
+})(document);
+// delete the temporary CSS (for displaying all slides initially) when the user
+// starts to view slides
+(function() {
+  var deleted = false;
+  slideshow.on('beforeShowSlide', function(slide) {
+    if (deleted) return;
+    var sheets = document.styleSheets, node;
+    for (var i = 0; i < sheets.length; i++) {
+      node = sheets[i].ownerNode;
+      if (node.dataset["target"] !== "print-only") continue;
+      node.parentNode.removeChild(node);
+    }
+    deleted = true;
+  });
+})();
+(function() {
+  "use strict"
+  // Replace <script> tags in slides area to make them executable
+  var scripts = document.querySelectorAll(
+    '.remark-slides-area .remark-slide-container script'
+  );
+  if (!scripts.length) return;
+  for (var i = 0; i < scripts.length; i++) {
+    var s = document.createElement('script');
+    var code = document.createTextNode(scripts[i].textContent);
+    s.appendChild(code);
+    var scriptAttrs = scripts[i].attributes;
+    for (var j = 0; j < scriptAttrs.length; j++) {
+      s.setAttribute(scriptAttrs[j].name, scriptAttrs[j].value);
+    }
+    scripts[i].parentElement.replaceChild(s, scripts[i]);
+  }
+})();
+(function() {
+  var links = document.getElementsByTagName('a');
+  for (var i = 0; i < links.length; i++) {
+    if (/^(https?:)?\/\//.test(links[i].getAttribute('href'))) {
+      links[i].target = '_blank';
+    }
+  }
+})();
+// adds .remark-code-has-line-highlighted class to <pre> parent elements
+// of code chunks containing highlighted lines with class .remark-code-line-highlighted
+(function(d) {
+  const hlines = d.querySelectorAll('.remark-code-line-highlighted');
+  const preParents = [];
+  const findPreParent = function(line, p = 0) {
+    if (p > 1) return null; // traverse up no further than grandparent
+    const el = line.parentElement;
+    return el.tagName === "PRE" ? el : findPreParent(el, ++p);
+  };
+
+  for (let line of hlines) {
+    let pre = findPreParent(line);
+    if (pre && !preParents.includes(pre)) preParents.push(pre);
+  }
+  preParents.forEach(p => p.classList.add("remark-code-has-line-highlighted"));
+})(document);</script>
+
+<script>
+slideshow._releaseMath = function(el) {
+  var i, text, code, codes = el.getElementsByTagName('code');
+  for (i = 0; i < codes.length;) {
+    code = codes[i];
+    if (code.parentNode.tagName !== 'PRE' && code.childElementCount === 0) {
+      text = code.textContent;
+      if (/^\\\((.|\s)+\\\)$/.test(text) || /^\\\[(.|\s)+\\\]$/.test(text) ||
+          /^\$\$(.|\s)+\$\$$/.test(text) ||
+          /^\\begin\{([^}]+)\}(.|\s)+\\end\{[^}]+\}$/.test(text)) {
+        code.outerHTML = code.innerHTML;  // remove <code></code>
+        continue;
+      }
+    }
+    i++;
+  }
+};
+slideshow._releaseMath(document);
+</script>
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+(function () {
+  var script = document.createElement('script');
+  script.type = 'text/javascript';
+  script.src  = 'https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-MML-AM_CHTML';
+  if (location.protocol !== 'file:' && /^https?:/.test(script.src))
+    script.src  = script.src.replace(/^https?:/, '');
+  document.getElementsByTagName('head')[0].appendChild(script);
+})();
+</script>
+  </body>
+</html>

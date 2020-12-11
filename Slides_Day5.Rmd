@@ -1,0 +1,336 @@
+---
+title: Downloading Twitter Data 
+subtitle: Day 4
+author: "Olga Chyzh [www.olgachyzh.com]"
+output:
+  xaringan::moon_reader:
+    lib_dir: libs
+    nature:
+      highlightStyle: github
+      highlightLines: true
+      countIncrementalSlides: false
+exclude: true
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r  setup, message=FALSE, warning=FALSE, include=FALSE}
+options(
+  htmltools.dir.version = FALSE, # for blogdown
+  width = 80,
+  tibble.width = 80
+)
+
+knitr::opts_chunk$set(
+  fig.align = "center",  warning=FALSE, message=FALSE
+)
+
+```
+
+## Materials
+
+Download all materials from [Github](https://github.com/ochyzh/Websraping-Workshop)
+
+Workshop 1 video posted [here](https://play.library.utoronto.ca/0de7f9b4b6295aafbee68a61e198c845)
+
+Workshop 2 video posted [here](https://play.library.utoronto.ca/cc3ebb18816bfdcf8be7686bf060385b)
+
+Workshop 3 video posted [here](https://play.library.utoronto.ca/5646bdd009c7b8f905855e8e8b272e49)
+
+Workshop 4 video posted [here](https://play.library.utoronto.ca/3164d61a493bb8c44901d40aff512a3e)
+
+---
+
+## Outline
+
+- Good data management from start to finish of the project
+
+- Object classes: `numeric`/`integer`, `character`, `date`/`time`, `factor`.
+
+- Most frequently used tools: `select`, `arrange`, `filter`, `mutate`, `summarise`, `join_by`
+
+- Example: [Global Terrorism Dataset](https://www.start.umd.edu/gtd/access/). 
+
+---
+
+## Good Data Management Principles
+
+- *Never* alter the raw data in any way. No sorting, fixing typos<sup>1</sup> 
+
+    - Save all raw data files in a subfolder named `raw` and all the transformed data files in a subfolder named `data`.
+    
+- Save all data management in a script, so you can check/edit it as needed.
+
+- A readable script is a short script
+
+    - Use the pipe operators to chain functions
+    
+    - Loop as much as possible
+
+- Have separate scripts for data cleaning and analysis.  
+
+- Can you think of other principles?
+
+.footnote[
+<sup>1</sup> I do manually change Excel files to .csv format though.] 
+
+---
+
+## Required Packages
+
+Install all tidyverse packages:
+```{r gettv, echo = T, eval = T}
+library(tidyverse)
+library(magrittr)
+library(lubridate)
+library(ggplot2)
+library(stringr)
+library(data.table)
+library(openxlsx)
+
+```
+
+---
+
+## Get the Data
+
+Download the full [Global Terrorism Dataset](https://www.start.umd.edu/gtd/access/) (need to provide very basic info, like your name) or a smaller version of incidents since 2010 [here](https://raw.githubusercontent.com/ochyzh/Websraping-Workshop/master/GTD_small.csv)
+
+The full version is over 160 MB once converted to .csv. Opening it using `read.csv` will take a while. Try `data.table::fread` to read it faster:
+
+```{r}
+fulldata<-fread("./raw/globalterrorismdb_0919dist.csv", header=TRUE) 
+smalldata<-fread("https://raw.githubusercontent.com/ochyzh/Websraping-Workshop/master/GTD_small.csv", header=TRUE)
+```
+
+
+---
+
+## `select`, `filter` and `arrange`
+
+- `dplyr::select` allows you to select specific columns of the data
+
+     - E. g., use `select` to reduce the number of variables in the data
+
+```{r}
+fulldata<- select(fulldata, iyear, imonth, iday, country_txt, attacktype1_txt, latitude, longitude)
+smalldata <-select(smalldata, iyear, imonth, iday, country_txt, attacktype1_txt, latitude, longitude)
+```
+
+- `dplyr::filter` allows you to select by rows
+
+```{r, eval=F}
+filter(fulldata, iyear==2018)
+filter(smalldata, iyear==2018)
+```
+
+- `dplyr::arrange` allows you to sort the data
+
+```{r}
+fulldata<-arrange(fulldata, iyear, imonth, iday)
+smalldata<-arrange(smalldata, iyear, imonth, iday)
+```
+
+
+---
+
+## Check How Variables Are Stored
+
+`str` is for structure
+
+```{r, eval=F}
+str(fulldata)
+```
+
+    - `int` is for integer
+
+    - `chr` is for character
+
+    - `num` is for numeric
+
+- Fix any class inconsistencies, e. g. numbers stored as characters or factors
+
+---
+
+## Example: Convert Year/Month/Day to Date Class
+
+To convert to `date` using `lubridate`, need:
+
+$\color{green}\checkmark$ Year in the form XXXX 
+
+$\color{red}\times$ Month in the form XX  
+
+$\color{red}\times$ Day in the form XX 
+
+$\color{red}\times$ Some months and days are coded as 0
+
+$\color{red}\times$ Date saved in the format that combines year, month, and day, e.g., YYYY-MM-DD 
+
+---
+## Plan of Attack
+
+[1.] Use `filter` to drop the observations with unknown day or month (can you think of other ways to treat these?)
+
+```{r}
+fulldata<- filter(fulldata, imonth!=0, iday !=0)
+
+
+```
+
+[2.] Pad month and day with leading zeroes, using `str_pad` from the `stringr` package
+
+```{r}
+fulldata$month<-str_pad(fulldata$imonth,2,pad="0")
+fulldata$day<-str_pad(fulldata$iday,2,pad="0")
+
+```
+
+[3.] Use `paste0` to combine year, month, and date
+
+```{r}
+fulldata$date<-paste0(fulldata$iyear,fulldata$month,fulldata$day)
+```
+
+[4.] Convert variable `date` to class "date"
+
+```{r}
+fulldata$date<-ymd(fulldata$date)
+```
+
+---
+
+## `dplyr::mutate`
+
+- In the previous couple slides, we recoded variables in our data using `base` R.
+
+- `mutate` is a function to recode within the `dplyr` package.
+
+- Does the same thing, but works well with other `dplyr` functions when chained into a pipe
+
+- Makes for shorter/clearer code chunks
+
+```{r}
+fulldata<-fulldata %>% 
+  filter(imonth!=0, iday !=0) %>%
+  mutate(month=str_pad(imonth,2,pad="0"), 
+         day=str_pad(iday,2,pad="0"),
+         date<-paste0(iyear,month,day),
+         date<-ymd(date))
+
+smalldata<-smalldata %>% 
+  filter(imonth!=0, iday !=0) %>%
+  mutate(month=str_pad(imonth,2,pad="0"), 
+         day=str_pad(iday,2,pad="0"),
+         date<-paste0(iyear,month,day),
+         date<-ymd(date))
+```
+---
+## Joining Multiple Datasets
+
+We often want to add additional variables into our data.
+
+For example, if we wanted to make a choropleth map of the world that colors countries based on the number of terrorist attacks in 2018, we would need to merge our data with a the data on geographical borders.
+
+Library `mapdata` contains data on geographical borders that would allow us to make a map.
+
+```{r}
+library(mapdata)
+world<-map_data("world")
+head(world)
+```
+
+
+---
+## Make the Map of the World
+
+```{r}
+ggplot(data=filter(world, region!="Antarctica"), aes(x=long, y=lat, group=group))+geom_polygon(color="black", fill="white") +
+  scale_y_continuous("")
+```
+
+---
+
+## Joining Two Datasets
+
+- In order to join two datasets, we must identify the common variable, i.e. the "joining" variable.
+
+```{r}
+head(smalldata)
+head(world)
+```
+
+- Variable `country_txt` identifies observations in teh `smalldata` dataset, while the same information in the `world` dataset is contained in the variable `region`.
+
+- The joining variable must be formatted the same way in both datasets, e.g., capitalization, accents, apostrophes, spelling.
+
+---
+## Prepare the Terrorism Data
+
+- The unit of observation is attack, but we want to shade countries proportional to the number of attacks.
+
+- We need to change the level of aggregation from *attack* to *country*.
+
+- We can use `summarise` with *country* as the grouping variable
+
+```{r}
+smalldata<- smalldata %>% 
+  group_by(country_txt) %>%
+  summarise(num_attks=length(country_txt), .groups="keep") %>%
+  arrange(desc(num_attks))
+```
+
+
+---
+
+## Check Before Joining
+
+- Before we join these two datasets, we will do a check using `anti_join`.
+
+- `anti_join` will show us all the countries that are not matching up.
+
+```{r}
+nomatch1<- smalldata %>% anti_join(world, by=c("country_txt"="region"))
+unique(nomatch1$country_txt)
+
+nomatch2<- world %>% anti_join(smalldata, by=c("region"="country_txt"))
+unique(nomatch2$region)
+```
+
+
+---
+
+## Fix Spelling of Country Names
+
+```{r}
+smalldata<-smalldata %>% mutate(region=country_txt, region=str_replace(region,"United States","USA"),
+                     region=str_replace(region,"United Kingdom","UK"),
+                     region=str_replace(region,"Bosnia-Herzegovina","Bosnia and Herzegovina"),
+                     region=str_replace(region,"West Bank and Gaza Strip","Palestine"),
+                     region=str_replace(region,"Slovak Republic","Slovakia"),
+                     region=str_replace(region,"Trinidad and Tobago","Trinidad"),
+                     region=str_squish(region)
+                     )
+
+```
+---
+
+## Merge
+
+```{r}
+world %>% filter(region!="Antarctica") %>% left_join(smalldata, by="region") %>%
+  ggplot(aes(x=long, y=lat, group=group, fill=log(num_attks)))+geom_polygon(color="black") +
+  scale_y_continuous("", breaks=NULL)+scale_x_continuous("", breaks=NULL)+ scale_fill_gradient2("Attks",na.value="white")+theme_bw()
+```
+
+
+
+---
+## More resources:
+
+    - [Karl Browman's blog](https://kbroman.org/dataorg/)
+    
+    - [Hadley Wickam's website](http://hadley.nz/)
+    
+    - [Heike Hoffman's class website](https://stat579-at-isu.github.io/)
+    
+
